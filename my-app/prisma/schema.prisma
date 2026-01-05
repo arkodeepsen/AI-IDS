@@ -1,0 +1,174 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============================================
+// AI-Based Intrusion Detection System Schema
+// ============================================
+
+// Network packets captured for analysis
+model NetworkPacket {
+  id          String   @id @default(cuid())
+  timestamp   DateTime @default(now())
+  sourceIP    String
+  destIP      String
+  sourcePort  Int
+  destPort    Int
+  protocol    String
+  packetSize  Int
+  flags       String?
+  payload     String?
+  
+  // Relations
+  detectionResult DetectionResult?
+  
+  createdAt   DateTime @default(now())
+  
+  @@index([sourceIP])
+  @@index([destIP])
+  @@index([timestamp])
+}
+
+// Detection results from ML analysis
+model DetectionResult {
+  id              String   @id @default(cuid())
+  timestamp       DateTime @default(now())
+  isAnomaly       Boolean
+  threatLevel     ThreatLevel
+  attackType      String?
+  confidence      Float
+  detectionMethod String
+  description     String
+  recommendations String[]
+  
+  // Relations
+  packetId        String   @unique
+  packet          NetworkPacket @relation(fields: [packetId], references: [id], onDelete: Cascade)
+  
+  createdAt       DateTime @default(now())
+  
+  @@index([isAnomaly])
+  @@index([threatLevel])
+  @@index([timestamp])
+}
+
+// Security alerts generated from detections
+model Alert {
+  id          String      @id @default(cuid())
+  timestamp   DateTime    @default(now())
+  severity    Severity
+  title       String
+  message     String
+  sourceIP    String
+  destIP      String
+  attackType  String
+  status      AlertStatus @default(NEW)
+  
+  // Who handled the alert
+  handledBy   String?
+  handledAt   DateTime?
+  notes       String?
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@index([status])
+  @@index([severity])
+  @@index([timestamp])
+}
+
+// ML Model performance metrics
+model ModelMetrics {
+  id                String   @id @default(cuid())
+  method            String
+  accuracy          Float
+  precision         Float
+  recall            Float
+  f1Score           Float
+  falsePositiveRate Float
+  detectionTime     Float
+  
+  // Training info
+  trainingSamples   Int?
+  testingSamples    Int?
+  datasetUsed       String?
+  
+  recordedAt        DateTime @default(now())
+  
+  @@index([method])
+  @@index([recordedAt])
+}
+
+// System statistics and logs
+model SystemStats {
+  id                   String   @id @default(cuid())
+  timestamp            DateTime @default(now())
+  totalPacketsAnalyzed Int
+  anomaliesDetected    Int
+  falsePositives       Int
+  truePositives        Int
+  packetsPerSecond     Float
+  cpuUsage             Float
+  memoryUsage          Float
+  uptime               Int
+  
+  @@index([timestamp])
+}
+
+// User sessions for the dashboard
+model UserSession {
+  id          String   @id @default(cuid())
+  userId      String?
+  ipAddress   String
+  userAgent   String?
+  startedAt   DateTime @default(now())
+  endedAt     DateTime?
+  
+  @@index([userId])
+  @@index([startedAt])
+}
+
+// Audit log for security events
+model AuditLog {
+  id          String   @id @default(cuid())
+  action      String
+  entityType  String
+  entityId    String?
+  details     Json?
+  performedBy String?
+  ipAddress   String?
+  timestamp   DateTime @default(now())
+  
+  @@index([action])
+  @@index([entityType])
+  @@index([timestamp])
+}
+
+// Enums
+enum ThreatLevel {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum Severity {
+  INFO
+  WARNING
+  DANGER
+  CRITICAL
+}
+
+enum AlertStatus {
+  NEW
+  INVESTIGATING
+  RESOLVED
+  FALSE_POSITIVE
+}
