@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI-Based IDS Monitor</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <header class="header">
+      <div class="header-left">
+        <div class="logo">🛡️</div>
+        <div class="title">
+          <h1>AI-Based IDS</h1>
+          <span class="status" id="status">Connecting...</span>
+        </div>
+      </div>
+      <button class="settings-btn" id="settingsBtn" title="Settings">⚙️</button>
+    </header>
+
+    <!-- Stats Cards -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-value" id="totalPackets">0</div>
+        <div class="stat-label">Packets</div>
+      </div>
+      <div class="stat-card anomaly">
+        <div class="stat-value" id="anomalies">0</div>
+        <div class="stat-label">Anomalies</div>
+      </div>
+      <div class="stat-card blocked">
+        <div class="stat-value" id="blocked">0</div>
+        <div class="stat-label">Blocked</div>
+      </div>
+    </div>
+
+    <!-- Threat Level Indicator -->
+    <div class="threat-indicator" id="threatIndicator">
+      <div class="threat-bar">
+        <div class="threat-fill" id="threatFill"></div>
+      </div>
+      <div class="threat-labels">
+        <span>Low</span>
+        <span>Medium</span>
+        <span>High</span>
+        <span>Critical</span>
+      </div>
+    </div>
+
+    <!-- Recent Detections -->
+    <div class="detections-section">
+      <h2>Recent Detections</h2>
+      <div class="detections-list" id="detectionsList">
+        <div class="loading">Loading...</div>
+      </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="actions">
+      <button class="action-btn primary" id="refreshBtn">
+        🔄 Refresh
+      </button>
+      <button class="action-btn" id="dashboardBtn">
+        📊 Dashboard
+      </button>
+      <button class="action-btn danger" id="pauseBtn">
+        ⏸️ Pause
+      </button>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <span>Model v<span id="modelVersion">1</span></span>
+      <span>•</span>
+      <span id="lastUpdate">Never</span>
+    </footer>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
