@@ -10,59 +10,31 @@ import AIAssistant from '@/components/AIAssistant';
 import AlertsPanel from '@/components/AlertsPanel';
 import DatasetInfo from '@/components/DatasetInfo';
 import { RLHFFeedbackPanel, AutoResponseControl, TrainingDataManager } from '@/components/controls';
-import { Shield, Cpu, Brain, Database, Sparkles, Zap } from 'lucide-react';
+import { Shield } from 'lucide-react';
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState('dashboard');
 
   return (
-    <div className="min-h-screen bg-black grid-pattern">
+    <div className="min-h-screen bg-zinc-950">
       <Navigation activeTab={activeTab} onTabChange={setActiveTab} />
 
-      <main className="max-w-7xl mx-auto px-4 py-6">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-white mb-2">
+        <div className="mb-6">
+          <h1 className="text-xl font-semibold text-white">
             AI-Based Intrusion Detection System
           </h1>
-          <p className="text-gray-400">
+          <p className="text-sm text-zinc-500 mt-1">
             Real-time network attack detection using Machine Learning
           </p>
-
-          {/* Tech badges */}
-          <div className="flex flex-wrap gap-3 mt-4">
-            <span className="flex items-center gap-2 px-3 py-1.5 bg-blue-500/10 border border-blue-500/30 text-blue-400 rounded-full text-sm">
-              <Brain className="w-4 h-4" />
-              Isolation Forest
-            </span>
-            <span className="flex items-center gap-2 px-3 py-1.5 bg-green-500/10 border border-green-500/30 text-green-400 rounded-full text-sm">
-              <Cpu className="w-4 h-4" />
-              Autoencoders
-            </span>
-            <span className="flex items-center gap-2 px-3 py-1.5 bg-yellow-500/10 border border-yellow-500/30 text-yellow-400 rounded-full text-sm">
-              <Database className="w-4 h-4" />
-              K-Means Clustering
-            </span>
-            <span className="flex items-center gap-2 px-3 py-1.5 bg-orange-500/10 border border-orange-500/30 text-orange-400 rounded-full text-sm">
-              <Shield className="w-4 h-4" />
-              KNN Classifier
-            </span>
-            <span className="flex items-center gap-2 px-3 py-1.5 bg-red-500/10 border border-red-500/30 text-red-400 rounded-full text-sm">
-              <Zap className="w-4 h-4" />
-              Auto-Response
-            </span>
-            <span className="flex items-center gap-2 px-3 py-1.5 bg-purple-500/10 border border-purple-500/30 text-purple-400 rounded-full text-sm">
-              <Sparkles className="w-4 h-4" />
-              Gemini AI + RLHF
-            </span>
-          </div>
         </div>
 
         {/* Dashboard View */}
         {activeTab === 'dashboard' && (
-          <div className="space-y-6 slide-in">
+          <div className="space-y-4 fade-in">
             <StatsCards />
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
               <div className="lg:col-span-2">
                 <TrafficChart />
               </div>
@@ -76,9 +48,9 @@ export default function Home() {
 
         {/* Detection View */}
         {activeTab === 'detection' && (
-          <div className="space-y-6 slide-in">
+          <div className="space-y-4 fade-in">
             <StatsCards />
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <TrafficChart />
               <DetectionFeed />
             </div>
@@ -87,48 +59,44 @@ export default function Home() {
 
         {/* ML Models View */}
         {activeTab === 'models' && (
-          <div className="space-y-6 slide-in">
+          <div className="space-y-4 fade-in">
             <ModelComparison />
             <RLHFFeedbackPanel />
 
-            {/* Research Contribution Section */}
-            <div className="bg-gray-900/50 backdrop-blur border border-gray-800 rounded-xl p-6">
-              <h2 className="text-xl font-semibold text-white mb-4">Research Contribution</h2>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                <div className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg">
-                  <h3 className="text-lg font-medium text-blue-400 mb-2">
-                    Anomaly Detection Comparison
+            {/* Research Section */}
+            <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
+              <h2 className="text-base font-medium text-white mb-3">Research Contribution</h2>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                <div className="p-3 bg-zinc-800/50 rounded">
+                  <h3 className="text-sm font-medium text-white mb-1">
+                    Anomaly Detection
                   </h3>
-                  <p className="text-gray-400 text-sm">
-                    Comprehensive evaluation of Isolation Forest, Autoencoders, K-Means,
-                    and KNN for network intrusion detection.
+                  <p className="text-xs text-zinc-400">
+                    Comparison of IF, AE, K-Means, and KNN for intrusion detection.
                   </p>
                 </div>
-                <div className="p-4 bg-green-500/10 border border-green-500/20 rounded-lg">
-                  <h3 className="text-lg font-medium text-green-400 mb-2">
+                <div className="p-3 bg-zinc-800/50 rounded">
+                  <h3 className="text-sm font-medium text-white mb-1">
                     False-Positive Reduction
                   </h3>
-                  <p className="text-gray-400 text-sm">
-                    Novel ensemble approach combining 4 ML techniques to minimize
-                    false alarms while maintaining high detection rates.
+                  <p className="text-xs text-zinc-400">
+                    Ensemble approach combining 4 ML techniques.
                   </p>
                 </div>
-                <div className="p-4 bg-purple-500/10 border border-purple-500/20 rounded-lg">
-                  <h3 className="text-lg font-medium text-purple-400 mb-2">
+                <div className="p-3 bg-zinc-800/50 rounded">
+                  <h3 className="text-sm font-medium text-white mb-1">
                     RLHF Integration
                   </h3>
-                  <p className="text-gray-400 text-sm">
-                    Reinforcement Learning from Human Feedback for continuous
-                    model improvement based on user corrections.
+                  <p className="text-xs text-zinc-400">
+                    Continuous improvement from human feedback.
                   </p>
                 </div>
-                <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-lg">
-                  <h3 className="text-lg font-medium text-red-400 mb-2">
-                    Auto-Response System
+                <div className="p-3 bg-zinc-800/50 rounded">
+                  <h3 className="text-sm font-medium text-white mb-1">
+                    Auto-Response
                   </h3>
-                  <p className="text-gray-400 text-sm">
-                    Automatic attack prevention with zero human intervention
-                    and self-learning capabilities.
+                  <p className="text-xs text-zinc-400">
+                    Automatic prevention with self-learning.
                   </p>
                 </div>
               </div>
@@ -138,77 +106,73 @@ export default function Home() {
 
         {/* Auto-Response View */}
         {activeTab === 'auto-response' && (
-          <div className="space-y-6 slide-in">
+          <div className="fade-in">
             <AutoResponseControl />
           </div>
         )}
 
         {/* Training View */}
         {activeTab === 'training' && (
-          <div className="space-y-6 slide-in">
+          <div className="fade-in">
             <TrainingDataManager />
           </div>
         )}
 
         {/* Datasets View */}
         {activeTab === 'datasets' && (
-          <div className="space-y-6 slide-in">
+          <div className="space-y-4 fade-in">
             <DatasetInfo />
 
             {/* Feature Engineering */}
-            <div className="bg-gray-900/50 backdrop-blur border border-gray-800 rounded-xl p-6">
-              <h2 className="text-xl font-semibold text-white mb-4">Feature Engineering</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
+              <h2 className="text-base font-medium text-white mb-3">Feature Engineering</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <h3 className="text-lg font-medium text-gray-300 mb-3">
-                    Network Flow Features
-                  </h3>
-                  <ul className="space-y-2 text-sm text-gray-400">
+                  <h3 className="text-sm text-zinc-400 mb-2">Network Flow Features</h3>
+                  <ul className="space-y-1.5 text-xs text-zinc-500">
                     <li className="flex items-center gap-2">
-                      <span className="w-2 h-2 bg-blue-400 rounded-full" />
-                      Duration - Length of the connection
+                      <span className="w-1 h-1 bg-blue-400 rounded-full" />
+                      Duration - Connection length
                     </li>
                     <li className="flex items-center gap-2">
-                      <span className="w-2 h-2 bg-blue-400 rounded-full" />
-                      Protocol Type - TCP, UDP, ICMP
+                      <span className="w-1 h-1 bg-blue-400 rounded-full" />
+                      Protocol - TCP, UDP, ICMP
                     </li>
                     <li className="flex items-center gap-2">
-                      <span className="w-2 h-2 bg-blue-400 rounded-full" />
+                      <span className="w-1 h-1 bg-blue-400 rounded-full" />
                       Src/Dst Bytes - Data transferred
                     </li>
                     <li className="flex items-center gap-2">
-                      <span className="w-2 h-2 bg-blue-400 rounded-full" />
+                      <span className="w-1 h-1 bg-blue-400 rounded-full" />
                       Flag Status - TCP flags
                     </li>
                     <li className="flex items-center gap-2">
-                      <span className="w-2 h-2 bg-blue-400 rounded-full" />
-                      Service - HTTP, FTP, SSH, etc.
+                      <span className="w-1 h-1 bg-blue-400 rounded-full" />
+                      Service - HTTP, FTP, SSH
                     </li>
                   </ul>
                 </div>
                 <div>
-                  <h3 className="text-lg font-medium text-gray-300 mb-3">
-                    Statistical Features
-                  </h3>
-                  <ul className="space-y-2 text-sm text-gray-400">
+                  <h3 className="text-sm text-zinc-400 mb-2">Statistical Features</h3>
+                  <ul className="space-y-1.5 text-xs text-zinc-500">
                     <li className="flex items-center gap-2">
-                      <span className="w-2 h-2 bg-green-400 rounded-full" />
+                      <span className="w-1 h-1 bg-green-400 rounded-full" />
                       Count - Connections to same host
                     </li>
                     <li className="flex items-center gap-2">
-                      <span className="w-2 h-2 bg-green-400 rounded-full" />
-                      Serror Rate - SYN error percentage
+                      <span className="w-1 h-1 bg-green-400 rounded-full" />
+                      Serror Rate - SYN error %
                     </li>
                     <li className="flex items-center gap-2">
-                      <span className="w-2 h-2 bg-green-400 rounded-full" />
+                      <span className="w-1 h-1 bg-green-400 rounded-full" />
                       Same Srv Rate - Same service ratio
                     </li>
                     <li className="flex items-center gap-2">
-                      <span className="w-2 h-2 bg-green-400 rounded-full" />
-                      Dst Host Count - Destination connections
+                      <span className="w-1 h-1 bg-green-400 rounded-full" />
+                      Dst Host Count - Destination conns
                     </li>
                     <li className="flex items-center gap-2">
-                      <span className="w-2 h-2 bg-green-400 rounded-full" />
+                      <span className="w-1 h-1 bg-green-400 rounded-full" />
                       Packet Size Statistics
                     </li>
                   </ul>
@@ -220,10 +184,10 @@ export default function Home() {
 
         {/* Alerts View */}
         {activeTab === 'alerts' && (
-          <div className="space-y-6 slide-in">
+          <div className="space-y-4 fade-in">
             <StatsCards />
             <AlertsPanel />
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <DetectionFeed />
               <AIAssistant />
             </div>
@@ -232,21 +196,19 @@ export default function Home() {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-gray-800 mt-12">
-        <div className="max-w-7xl mx-auto px-4 py-6">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <Shield className="w-5 h-5 text-blue-400" />
-              <span className="text-gray-400 text-sm">
-                AI-Based Intrusion Detection System | Major Project 2025-26
+      <footer className="border-t border-zinc-800 mt-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Shield className="w-4 h-4 text-blue-500" />
+              <span className="text-zinc-500 text-xs">
+                AI-IDS | Major Project 2025-26
               </span>
             </div>
-            <div className="flex items-center gap-6 text-sm text-gray-500">
-              <span>NSL-KDD & CICIDS Datasets</span>
-              <span>•</span>
-              <span>KNN + RLHF + Auto-Response</span>
-              <span>•</span>
-              <span>Powered by Gemini AI</span>
+            <div className="flex items-center gap-4 text-xs text-zinc-600">
+              <span>NSL-KDD & CICIDS</span>
+              <span>KNN + RLHF</span>
+              <span>Gemini AI</span>
             </div>
           </div>
         </div>

@@ -17,7 +17,6 @@ import {
   Legend
 } from 'recharts';
 import { MLModelMetrics } from '@/lib/types';
-import { Cpu, Zap, Target, Shield } from 'lucide-react';
 
 export default function ModelComparison() {
   const [metrics, setMetrics] = useState<MLModelMetrics[]>([]);
@@ -39,7 +38,7 @@ export default function ModelComparison() {
     Accuracy: (m.accuracy * 100).toFixed(1),
     Precision: (m.precision * 100).toFixed(1),
     Recall: (m.recall * 100).toFixed(1),
-    'F1 Score': (m.f1Score * 100).toFixed(1),
+    F1: (m.f1Score * 100).toFixed(1),
   }));
 
   const radarData = [
@@ -50,16 +49,16 @@ export default function ModelComparison() {
     { metric: 'Speed', ...Object.fromEntries(metrics.map(m => [m.method, 100 - m.detectionTime * 10])) },
   ];
 
-  const colors = ['#3b82f6', '#22c55e', '#f59e0b', '#f97316', '#8b5cf6'];
+  const colors = ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6'];
 
   const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ value: number; name: string; color: string }>; label?: string }) => {
     if (active && payload && payload.length) {
       return (
-        <div className="bg-gray-900 border border-gray-700 rounded-lg p-3 shadow-xl">
-          <p className="text-gray-400 text-sm mb-2">{label}</p>
+        <div className="bg-zinc-900 border border-zinc-700 rounded-md p-2 text-sm">
+          <p className="text-zinc-400 text-xs mb-1">{label}</p>
           {payload.map((entry, index) => (
-            <p key={index} className="text-sm" style={{ color: entry.color }}>
-              {entry.name}: <span className="font-semibold">{entry.value}%</span>
+            <p key={index} className="text-xs" style={{ color: entry.color }}>
+              {entry.name}: {entry.value}%
             </p>
           ))}
         </div>
@@ -69,78 +68,82 @@ export default function ModelComparison() {
   };
 
   return (
-    <div className="bg-gray-900/50 backdrop-blur border border-gray-800 rounded-xl p-6">
-      <div className="flex items-center justify-between mb-6">
+    <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
+      <div className="flex items-center justify-between mb-4">
         <div>
-          <h2 className="text-xl font-semibold text-white">ML Model Comparison</h2>
-          <p className="text-gray-400 text-sm">Performance metrics across detection methods</p>
+          <h2 className="text-base font-medium text-white">Model Comparison</h2>
+          <p className="text-xs text-zinc-500">Performance metrics</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-1">
           <button
             onClick={() => setView('bar')}
-            className={`px-3 py-1 rounded-lg text-sm transition-colors ${view === 'bar'
-                ? 'bg-blue-500 text-white'
-                : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
-              }`}
+            className={`px-2.5 py-1 rounded text-xs transition-colors ${
+              view === 'bar'
+                ? 'bg-zinc-700 text-white'
+                : 'text-zinc-400 hover:text-white'
+            }`}
           >
-            Bar Chart
+            Bar
           </button>
           <button
             onClick={() => setView('radar')}
-            className={`px-3 py-1 rounded-lg text-sm transition-colors ${view === 'radar'
-                ? 'bg-blue-500 text-white'
-                : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
-              }`}
+            className={`px-2.5 py-1 rounded text-xs transition-colors ${
+              view === 'radar'
+                ? 'bg-zinc-700 text-white'
+                : 'text-zinc-400 hover:text-white'
+            }`}
           >
-            Radar Chart
+            Radar
           </button>
         </div>
       </div>
 
-      {/* Quick Stats */}
-      <div className="grid grid-cols-4 gap-4 mb-6">
+      {/* Model Stats */}
+      <div className="grid grid-cols-4 gap-3 mb-4">
         {metrics.map((m, idx) => (
-          <div key={m.method} className="bg-gray-800/50 rounded-lg p-3">
-            <div className="flex items-center gap-2 mb-2">
+          <div key={m.method} className="bg-zinc-800/50 rounded p-2.5">
+            <div className="flex items-center gap-1.5 mb-1.5">
               <div
-                className="w-3 h-3 rounded-full"
+                className="w-2 h-2 rounded-full"
                 style={{ backgroundColor: colors[idx] }}
               />
-              <span className="text-sm text-gray-300">{m.method.replace(' Clustering', '')}</span>
+              <span className="text-xs text-zinc-400 truncate">
+                {m.method.replace(' Clustering', '')}
+              </span>
             </div>
-            <div className="grid grid-cols-2 gap-2 text-xs">
+            <div className="grid grid-cols-2 gap-1 text-xs">
               <div>
-                <span className="text-gray-500">Accuracy</span>
-                <p className="text-white font-medium">{(m.accuracy * 100).toFixed(1)}%</p>
+                <span className="text-zinc-600">Acc</span>
+                <p className="text-white">{(m.accuracy * 100).toFixed(1)}%</p>
               </div>
               <div>
-                <span className="text-gray-500">FPR</span>
-                <p className="text-white font-medium">{(m.falsePositiveRate * 100).toFixed(2)}%</p>
+                <span className="text-zinc-600">FPR</span>
+                <p className="text-white">{(m.falsePositiveRate * 100).toFixed(2)}%</p>
               </div>
             </div>
           </div>
         ))}
       </div>
 
-      <div className="h-[350px]">
+      <div className="h-[300px]">
         <ResponsiveContainer width="100%" height="100%">
           {view === 'bar' ? (
             <BarChart data={barData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-              <XAxis dataKey="name" stroke="#6b7280" fontSize={12} />
-              <YAxis stroke="#6b7280" fontSize={12} domain={[0, 100]} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />
+              <XAxis dataKey="name" stroke="#52525b" fontSize={10} tickLine={false} axisLine={false} />
+              <YAxis stroke="#52525b" fontSize={10} domain={[0, 100]} tickLine={false} axisLine={false} />
               <Tooltip content={<CustomTooltip />} />
-              <Legend />
-              <Bar dataKey="Accuracy" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="Precision" fill="#22c55e" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="Recall" fill="#f59e0b" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="F1 Score" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+              <Legend wrapperStyle={{ fontSize: '11px' }} iconSize={8} />
+              <Bar dataKey="Accuracy" fill="#3b82f6" radius={[2, 2, 0, 0]} />
+              <Bar dataKey="Precision" fill="#22c55e" radius={[2, 2, 0, 0]} />
+              <Bar dataKey="Recall" fill="#f59e0b" radius={[2, 2, 0, 0]} />
+              <Bar dataKey="F1" fill="#8b5cf6" radius={[2, 2, 0, 0]} />
             </BarChart>
           ) : (
             <RadarChart data={radarData}>
-              <PolarGrid stroke="#374151" />
-              <PolarAngleAxis dataKey="metric" stroke="#6b7280" fontSize={12} />
-              <PolarRadiusAxis stroke="#6b7280" fontSize={10} domain={[0, 100]} />
+              <PolarGrid stroke="#27272a" />
+              <PolarAngleAxis dataKey="metric" stroke="#52525b" fontSize={10} />
+              <PolarRadiusAxis stroke="#52525b" fontSize={9} domain={[0, 100]} />
               {metrics.map((m, idx) => (
                 <Radar
                   key={m.method}
@@ -149,44 +152,32 @@ export default function ModelComparison() {
                   stroke={colors[idx]}
                   fill={colors[idx]}
                   fillOpacity={0.1}
-                  strokeWidth={2}
+                  strokeWidth={1.5}
                 />
               ))}
-              <Legend />
+              <Legend wrapperStyle={{ fontSize: '11px' }} iconSize={8} />
             </RadarChart>
           )}
         </ResponsiveContainer>
       </div>
 
-      {/* Research Insights */}
-      <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="flex items-center gap-3 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
-          <Target className="w-8 h-8 text-blue-400" />
-          <div>
-            <p className="text-xs text-gray-400">Best Accuracy</p>
-            <p className="text-sm font-medium text-white">Ensemble (95.67%)</p>
-          </div>
+      {/* Summary Stats */}
+      <div className="mt-4 grid grid-cols-4 gap-3">
+        <div className="bg-zinc-800/50 rounded p-2.5">
+          <p className="text-xs text-zinc-500">Best Accuracy</p>
+          <p className="text-sm text-white mt-0.5">Ensemble 95.67%</p>
         </div>
-        <div className="flex items-center gap-3 p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
-          <Shield className="w-8 h-8 text-green-400" />
-          <div>
-            <p className="text-xs text-gray-400">Lowest FPR</p>
-            <p className="text-sm font-medium text-white">Ensemble (1.89%)</p>
-          </div>
+        <div className="bg-zinc-800/50 rounded p-2.5">
+          <p className="text-xs text-zinc-500">Lowest FPR</p>
+          <p className="text-sm text-white mt-0.5">Ensemble 1.89%</p>
         </div>
-        <div className="flex items-center gap-3 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
-          <Zap className="w-8 h-8 text-yellow-400" />
-          <div>
-            <p className="text-xs text-gray-400">Fastest</p>
-            <p className="text-sm font-medium text-white">K-Means (1.8ms)</p>
-          </div>
+        <div className="bg-zinc-800/50 rounded p-2.5">
+          <p className="text-xs text-zinc-500">Fastest</p>
+          <p className="text-sm text-white mt-0.5">K-Means 1.8ms</p>
         </div>
-        <div className="flex items-center gap-3 p-3 bg-purple-500/10 border border-purple-500/20 rounded-lg">
-          <Cpu className="w-8 h-8 text-purple-400" />
-          <div>
-            <p className="text-xs text-gray-400">Best F1</p>
-            <p className="text-sm font-medium text-white">Ensemble (93.11%)</p>
-          </div>
+        <div className="bg-zinc-800/50 rounded p-2.5">
+          <p className="text-xs text-zinc-500">Best F1</p>
+          <p className="text-sm text-white mt-0.5">Ensemble 93.11%</p>
         </div>
       </div>
     </div>

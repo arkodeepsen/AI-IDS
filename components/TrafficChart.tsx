@@ -1,13 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { 
-  LineChart, 
-  Line, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
   ResponsiveContainer,
   Legend,
   AreaChart,
@@ -26,10 +26,9 @@ export default function TrafficChart() {
   const [chartType, setChartType] = useState<'line' | 'area'>('area');
 
   useEffect(() => {
-    // Initialize with some data
     const initialData: ChartData[] = [];
     const now = new Date();
-    
+
     for (let i = 30; i >= 0; i--) {
       const time = new Date(now.getTime() - i * 2000);
       initialData.push({
@@ -42,7 +41,6 @@ export default function TrafficChart() {
     initialData.forEach(d => d.total = d.normal + d.anomaly);
     setData(initialData);
 
-    // Real-time updates
     const interval = setInterval(() => {
       setData(prev => {
         const newData = [...prev.slice(1)];
@@ -65,11 +63,11 @@ export default function TrafficChart() {
   const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ value: number; name: string; color: string }>; label?: string }) => {
     if (active && payload && payload.length) {
       return (
-        <div className="bg-gray-900 border border-gray-700 rounded-lg p-3 shadow-xl">
-          <p className="text-gray-400 text-sm mb-2">{label}</p>
+        <div className="bg-zinc-900 border border-zinc-700 rounded-md p-2 text-sm">
+          <p className="text-zinc-400 text-xs mb-1">{label}</p>
           {payload.map((entry, index) => (
-            <p key={index} className="text-sm" style={{ color: entry.color }}>
-              {entry.name}: <span className="font-semibold">{entry.value}</span>
+            <p key={index} className="text-xs" style={{ color: entry.color }}>
+              {entry.name}: {entry.value}
             </p>
           ))}
         </div>
@@ -79,29 +77,29 @@ export default function TrafficChart() {
   };
 
   return (
-    <div className="bg-gray-900/50 backdrop-blur border border-gray-800 rounded-xl p-6">
-      <div className="flex items-center justify-between mb-6">
+    <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
+      <div className="flex items-center justify-between mb-4">
         <div>
-          <h2 className="text-xl font-semibold text-white">Network Traffic Analysis</h2>
-          <p className="text-gray-400 text-sm">Real-time packet monitoring</p>
+          <h2 className="text-base font-medium text-white">Network Traffic</h2>
+          <p className="text-xs text-zinc-500">Real-time monitoring</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-1">
           <button
             onClick={() => setChartType('area')}
-            className={`px-3 py-1 rounded-lg text-sm transition-colors ${
-              chartType === 'area' 
-                ? 'bg-blue-500 text-white' 
-                : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+            className={`px-2.5 py-1 rounded text-xs transition-colors ${
+              chartType === 'area'
+                ? 'bg-zinc-700 text-white'
+                : 'text-zinc-400 hover:text-white'
             }`}
           >
             Area
           </button>
           <button
             onClick={() => setChartType('line')}
-            className={`px-3 py-1 rounded-lg text-sm transition-colors ${
-              chartType === 'line' 
-                ? 'bg-blue-500 text-white' 
-                : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+            className={`px-2.5 py-1 rounded text-xs transition-colors ${
+              chartType === 'line'
+                ? 'bg-zinc-700 text-white'
+                : 'text-zinc-400 hover:text-white'
             }`}
           >
             Line
@@ -109,83 +107,83 @@ export default function TrafficChart() {
         </div>
       </div>
 
-      <div className="h-[300px]">
+      <div className="h-[280px]">
         <ResponsiveContainer width="100%" height="100%">
           {chartType === 'area' ? (
             <AreaChart data={data}>
-              <defs>
-                <linearGradient id="normalGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#22c55e" stopOpacity={0.3}/>
-                  <stop offset="95%" stopColor="#22c55e" stopOpacity={0}/>
-                </linearGradient>
-                <linearGradient id="anomalyGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#ef4444" stopOpacity={0.3}/>
-                  <stop offset="95%" stopColor="#ef4444" stopOpacity={0}/>
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-              <XAxis 
-                dataKey="time" 
-                stroke="#6b7280" 
-                fontSize={12}
+              <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />
+              <XAxis
+                dataKey="time"
+                stroke="#52525b"
+                fontSize={10}
                 tickLine={false}
+                axisLine={false}
               />
-              <YAxis 
-                stroke="#6b7280" 
-                fontSize={12}
+              <YAxis
+                stroke="#52525b"
+                fontSize={10}
                 tickLine={false}
                 axisLine={false}
               />
               <Tooltip content={<CustomTooltip />} />
-              <Legend />
+              <Legend
+                wrapperStyle={{ fontSize: '12px' }}
+                iconSize={8}
+              />
               <Area
                 type="monotone"
                 dataKey="normal"
-                name="Normal Traffic"
+                name="Normal"
                 stroke="#22c55e"
-                fill="url(#normalGradient)"
-                strokeWidth={2}
+                fill="#22c55e"
+                fillOpacity={0.1}
+                strokeWidth={1.5}
               />
               <Area
                 type="monotone"
                 dataKey="anomaly"
-                name="Anomalies"
+                name="Anomaly"
                 stroke="#ef4444"
-                fill="url(#anomalyGradient)"
-                strokeWidth={2}
+                fill="#ef4444"
+                fillOpacity={0.1}
+                strokeWidth={1.5}
               />
             </AreaChart>
           ) : (
             <LineChart data={data}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-              <XAxis 
-                dataKey="time" 
-                stroke="#6b7280" 
-                fontSize={12}
+              <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />
+              <XAxis
+                dataKey="time"
+                stroke="#52525b"
+                fontSize={10}
                 tickLine={false}
+                axisLine={false}
               />
-              <YAxis 
-                stroke="#6b7280" 
-                fontSize={12}
+              <YAxis
+                stroke="#52525b"
+                fontSize={10}
                 tickLine={false}
                 axisLine={false}
               />
               <Tooltip content={<CustomTooltip />} />
-              <Legend />
+              <Legend
+                wrapperStyle={{ fontSize: '12px' }}
+                iconSize={8}
+              />
               <Line
                 type="monotone"
                 dataKey="normal"
-                name="Normal Traffic"
+                name="Normal"
                 stroke="#22c55e"
-                strokeWidth={2}
+                strokeWidth={1.5}
                 dot={false}
               />
               <Line
                 type="monotone"
                 dataKey="anomaly"
-                name="Anomalies"
+                name="Anomaly"
                 stroke="#ef4444"
-                strokeWidth={2}
+                strokeWidth={1.5}
                 dot={false}
               />
             </LineChart>

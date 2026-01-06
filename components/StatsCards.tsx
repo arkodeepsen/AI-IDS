@@ -1,13 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { 
-  Shield, 
-  AlertTriangle, 
-  Activity, 
-  Cpu, 
+import {
+  Shield,
+  AlertTriangle,
+  Activity,
+  Cpu,
   Database,
-  TrendingUp,
   Clock
 } from 'lucide-react';
 
@@ -16,35 +15,17 @@ interface StatsCardProps {
   value: string | number;
   subtitle?: string;
   icon: React.ReactNode;
-  trend?: { value: number; isPositive: boolean };
-  color: 'blue' | 'green' | 'red' | 'yellow' | 'purple';
 }
 
-function StatsCard({ title, value, subtitle, icon, trend, color }: StatsCardProps) {
-  const colorClasses = {
-    blue: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
-    green: 'bg-green-500/10 text-green-500 border-green-500/20',
-    red: 'bg-red-500/10 text-red-500 border-red-500/20',
-    yellow: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20',
-    purple: 'bg-purple-500/10 text-purple-500 border-purple-500/20',
-  };
-
+function StatsCard({ title, value, subtitle, icon }: StatsCardProps) {
   return (
-    <div className="bg-gray-900/50 backdrop-blur border border-gray-800 rounded-xl p-6 hover:border-gray-700 transition-colors">
-      <div className="flex items-center justify-between mb-4">
-        <div className={`p-3 rounded-lg ${colorClasses[color]}`}>
-          {icon}
-        </div>
-        {trend && (
-          <div className={`flex items-center text-sm ${trend.isPositive ? 'text-green-400' : 'text-red-400'}`}>
-            <TrendingUp className={`w-4 h-4 mr-1 ${!trend.isPositive && 'rotate-180'}`} />
-            {trend.value}%
-          </div>
-        )}
+    <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-zinc-500">{icon}</span>
       </div>
-      <h3 className="text-gray-400 text-sm font-medium">{title}</h3>
-      <p className="text-2xl font-bold text-white mt-1">{value}</p>
-      {subtitle && <p className="text-gray-500 text-xs mt-1">{subtitle}</p>}
+      <p className="text-2xl font-semibold text-white">{value}</p>
+      <p className="text-sm text-zinc-400 mt-1">{title}</p>
+      {subtitle && <p className="text-xs text-zinc-500 mt-0.5">{subtitle}</p>}
     </div>
   );
 }
@@ -71,7 +52,6 @@ export default function StatsCards() {
 
   useEffect(() => {
     setMounted(true);
-    // Simulate real-time stats updates
     const interval = setInterval(() => {
       setStats(prev => ({
         totalPackets: prev.totalPackets + Math.floor(Math.random() * 50) + 10,
@@ -95,50 +75,42 @@ export default function StatsCards() {
   };
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
       <StatsCard
         title="Total Packets"
         value={stats.totalPackets.toLocaleString()}
-        subtitle="Analyzed this session"
-        icon={<Database className="w-5 h-5" />}
-        trend={{ value: 12, isPositive: true }}
-        color="blue"
+        subtitle="Analyzed"
+        icon={<Database className="w-4 h-4" />}
       />
       <StatsCard
         title="Anomalies"
         value={stats.anomalies}
-        subtitle="Detected threats"
-        icon={<AlertTriangle className="w-5 h-5" />}
-        color="red"
+        subtitle="Detected"
+        icon={<AlertTriangle className="w-4 h-4" />}
       />
       <StatsCard
         title="Threat Level"
         value={stats.threatLevel}
-        subtitle="Current system status"
-        icon={<Shield className="w-5 h-5" />}
-        color={stats.threatLevel === 'Low' ? 'green' : stats.threatLevel === 'Medium' ? 'yellow' : 'red'}
+        subtitle="Current"
+        icon={<Shield className="w-4 h-4" />}
       />
       <StatsCard
         title="Packets/sec"
         value={stats.packetsPerSec}
-        subtitle="Processing rate"
-        icon={<Activity className="w-5 h-5" />}
-        trend={{ value: 8, isPositive: true }}
-        color="purple"
+        subtitle="Processing"
+        icon={<Activity className="w-4 h-4" />}
       />
       <StatsCard
-        title="Detection Latency"
+        title="Latency"
         value={`${stats.detectionLatency.toFixed(1)}ms`}
-        subtitle="Avg response time"
-        icon={<Cpu className="w-5 h-5" />}
-        color="yellow"
+        subtitle="Detection"
+        icon={<Cpu className="w-4 h-4" />}
       />
       <StatsCard
         title="Uptime"
         value={formatUptime(stats.uptime)}
-        subtitle="System running"
-        icon={<Clock className="w-5 h-5" />}
-        color="green"
+        subtitle="Session"
+        icon={<Clock className="w-4 h-4" />}
       />
     </div>
   );
