@@ -1,25 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { ThreatLevel } from '@prisma/client';
-import { 
-  EnsembleDetector, 
-  detectAnomaly, 
-  generateTrainingData 
-} from '@/lib/ml-detection';
+import { EnsembleDetector, generateTrainingData } from '@/lib/ml';
+import { detectAnomaly } from '@/lib/services/detection';
 import { generatePacketBatch } from '@/lib/utils';
 import { DetectionMethod } from '@/lib/types';
-
-// Initialize detector
-let detector: EnsembleDetector | null = null;
-
-function getDetector(): EnsembleDetector {
-  if (!detector) {
-    detector = new EnsembleDetector();
-    const trainingData = generateTrainingData(500);
-    detector.fit(trainingData);
-  }
-  return detector;
-}
 
 // Helper to convert threat level to Prisma enum
 function mapThreatLevel(level: string): ThreatLevel {
@@ -61,17 +46,16 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { 
-      count = 10, 
-      method = 'Ensemble', 
-      saveToDb = false 
+    const {
+      count = 10,
+      method = 'Ensemble',
+      saveToDb = false
     } = body;
 
     const packets = generatePacketBatch(Math.min(count, 100));
-    const det = getDetector();
 
-    const results = packets.map(packet => 
-      detectAnomaly(packet, method as DetectionMethod, det)
+    const results = packets.map(packet =>
+      detectAnomaly(packet, method as DetectionMethod)
     );
 
     // Save to database if requested
@@ -105,9 +89,12 @@ export async function POST(request: NextRequest) {
     }
 
     const anomalies = results.filter(r => r.isAnomaly);
+    const blocked = results.filter(r => r.autoResponseAction === 'blocked');
+
     const summary = {
       total: results.length,
       anomalies: anomalies.length,
+      blocked: blocked.length,
       critical: anomalies.filter(r => r.threatLevel === 'critical').length,
       high: anomalies.filter(r => r.threatLevel === 'high').length,
       medium: anomalies.filter(r => r.threatLevel === 'medium').length,

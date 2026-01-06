@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { ThreatLevel, Severity, AlertStatus } from '@prisma/client';
+import { Severity, AlertStatus } from '@prisma/client';
 
 // GET - Fetch alerts with optional filters
 export async function GET(request: NextRequest) {

@@ -1,43 +1,32 @@
+/**
+ * Detection API Route
+ * POST: Detect anomalies in network packets
+ * GET: Get single detection result
+ */
+
 import { NextRequest, NextResponse } from 'next/server';
-import { 
-  generatePacketBatch, 
-} from '@/lib/utils';
-import { 
-  EnsembleDetector, 
-  detectAnomaly, 
-  generateTrainingData, 
-  extractFeatures 
-} from '@/lib/ml-detection';
+import { generatePacketBatch } from '@/lib/utils';
+import { detectAnomaly, detectBatch, getDetector } from '@/lib/services/detection';
 import { DetectionMethod } from '@/lib/types';
-
-// Initialize and train the detector
-let detector: EnsembleDetector | null = null;
-
-function getDetector(): EnsembleDetector {
-  if (!detector) {
-    detector = new EnsembleDetector();
-    const trainingData = generateTrainingData(500);
-    detector.fit(trainingData);
-  }
-  return detector;
-}
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const { count = 10, method = 'Ensemble' } = body;
-    
+
+    // Initialize detector if needed
+    getDetector();
+
     const packets = generatePacketBatch(Math.min(count, 100));
-    const det = getDetector();
-    
-    const results = packets.map(packet => 
-      detectAnomaly(packet, method as DetectionMethod, det)
-    );
-    
+    const results = detectBatch(packets, method as DetectionMethod);
+
     const anomalies = results.filter(r => r.isAnomaly);
+    const blocked = results.filter(r => r.autoResponseAction === 'blocked');
+
     const summary = {
       total: results.length,
       anomalies: anomalies.length,
+      blocked: blocked.length,
       critical: anomalies.filter(r => r.threatLevel === 'critical').length,
       high: anomalies.filter(r => r.threatLevel === 'high').length,
       medium: anomalies.filter(r => r.threatLevel === 'medium').length,
@@ -60,12 +49,10 @@ export async function POST(request: NextRequest) {
 }
 
 export async function GET() {
-  // Generate a single packet detection for streaming
   try {
     const packets = generatePacketBatch(1);
-    const det = getDetector();
-    const result = detectAnomaly(packets[0], 'Ensemble', det);
-    
+    const result = detectAnomaly(packets[0], 'Ensemble');
+
     return NextResponse.json({
       success: true,
       result,
