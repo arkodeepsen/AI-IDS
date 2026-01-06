@@ -1,12 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { DatasetInfo } from '@/lib/types';
+import type { DatasetInfo as DatasetInfoType } from '@/lib/types';
 import { datasets } from '@/lib/utils';
 import { Database, FileText, Layers, PieChart } from 'lucide-react';
 
 export default function DatasetInfo() {
-  const [selectedDataset, setSelectedDataset] = useState<DatasetInfo>(datasets[0]);
+  const [selectedDataset, setSelectedDataset] = useState<DatasetInfoType>(datasets[0]);
 
   return (
     <div className="bg-gray-900/50 backdrop-blur border border-gray-800 rounded-xl p-6">
@@ -20,11 +20,10 @@ export default function DatasetInfo() {
             <button
               key={ds.name}
               onClick={() => setSelectedDataset(ds)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                selectedDataset.name === ds.name
-                  ? 'bg-blue-500 text-white'
-                  : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
-              }`}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${selectedDataset.name === ds.name
+                ? 'bg-blue-500 text-white'
+                : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                }`}
             >
               {ds.name}
             </button>
@@ -83,7 +82,7 @@ export default function DatasetInfo() {
                   </span>
                 </div>
                 <div className="h-3 bg-gray-700 rounded-full overflow-hidden">
-                  <div 
+                  <div
                     className="h-full bg-green-500 rounded-full"
                     style={{ width: `${selectedDataset.normalRatio * 100}%` }}
                   />
@@ -97,7 +96,7 @@ export default function DatasetInfo() {
                   </span>
                 </div>
                 <div className="h-3 bg-gray-700 rounded-full overflow-hidden">
-                  <div 
+                  <div
                     className="h-full bg-red-500 rounded-full"
                     style={{ width: `${selectedDataset.attackRatio * 100}%` }}
                   />

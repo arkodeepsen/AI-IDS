@@ -1,13 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { 
-  BarChart, 
-  Bar, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
   ResponsiveContainer,
   RadarChart,
   PolarGrid,
@@ -50,7 +50,7 @@ export default function ModelComparison() {
     { metric: 'Speed', ...Object.fromEntries(metrics.map(m => [m.method, 100 - m.detectionTime * 10])) },
   ];
 
-  const colors = ['#3b82f6', '#22c55e', '#f59e0b', '#8b5cf6'];
+  const colors = ['#3b82f6', '#22c55e', '#f59e0b', '#f97316', '#8b5cf6'];
 
   const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ value: number; name: string; color: string }>; label?: string }) => {
     if (active && payload && payload.length) {
@@ -78,21 +78,19 @@ export default function ModelComparison() {
         <div className="flex gap-2">
           <button
             onClick={() => setView('bar')}
-            className={`px-3 py-1 rounded-lg text-sm transition-colors ${
-              view === 'bar' 
-                ? 'bg-blue-500 text-white' 
+            className={`px-3 py-1 rounded-lg text-sm transition-colors ${view === 'bar'
+                ? 'bg-blue-500 text-white'
                 : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
-            }`}
+              }`}
           >
             Bar Chart
           </button>
           <button
             onClick={() => setView('radar')}
-            className={`px-3 py-1 rounded-lg text-sm transition-colors ${
-              view === 'radar' 
-                ? 'bg-blue-500 text-white' 
+            className={`px-3 py-1 rounded-lg text-sm transition-colors ${view === 'radar'
+                ? 'bg-blue-500 text-white'
                 : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
-            }`}
+              }`}
           >
             Radar Chart
           </button>
@@ -104,7 +102,7 @@ export default function ModelComparison() {
         {metrics.map((m, idx) => (
           <div key={m.method} className="bg-gray-800/50 rounded-lg p-3">
             <div className="flex items-center gap-2 mb-2">
-              <div 
+              <div
                 className="w-3 h-3 rounded-full"
                 style={{ backgroundColor: colors[idx] }}
               />

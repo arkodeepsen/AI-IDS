@@ -1,16 +1,18 @@
 'use client';
 
 import { useState } from 'react';
-import { 
-  Shield, 
-  Activity, 
-  Brain, 
-  Database, 
+import {
+  Shield,
+  Activity,
+  Brain,
+  Database,
   Bell,
   Menu,
   X,
   Github,
-  BookOpen
+  BookOpen,
+  Zap,
+  GraduationCap
 } from 'lucide-react';
 
 interface NavItem {
@@ -31,6 +33,8 @@ export default function Navigation({ activeTab, onTabChange }: NavigationProps) 
     { id: 'dashboard', label: 'Dashboard', icon: <Activity className="w-5 h-5" /> },
     { id: 'detection', label: 'Detection', icon: <Shield className="w-5 h-5" /> },
     { id: 'models', label: 'ML Models', icon: <Brain className="w-5 h-5" /> },
+    { id: 'auto-response', label: 'Auto-Response', icon: <Zap className="w-5 h-5" /> },
+    { id: 'training', label: 'Training', icon: <GraduationCap className="w-5 h-5" /> },
     { id: 'datasets', label: 'Datasets', icon: <Database className="w-5 h-5" /> },
     { id: 'alerts', label: 'Alerts', icon: <Bell className="w-5 h-5" /> },
   ];
@@ -56,11 +60,10 @@ export default function Navigation({ activeTab, onTabChange }: NavigationProps) 
               <button
                 key={item.id}
                 onClick={() => onTabChange(item.id)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
-                  activeTab === item.id
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${activeTab === item.id
                     ? 'bg-blue-500/20 text-blue-400'
                     : 'text-gray-400 hover:text-white hover:bg-gray-800'
-                }`}
+                  }`}
               >
                 {item.icon}
                 <span className="text-sm font-medium">{item.label}</span>
@@ -112,11 +115,10 @@ export default function Navigation({ activeTab, onTabChange }: NavigationProps) 
                   onTabChange(item.id);
                   setIsMobileMenuOpen(false);
                 }}
-                className={`flex items-center gap-3 w-full px-4 py-3 rounded-lg transition-colors ${
-                  activeTab === item.id
+                className={`flex items-center gap-3 w-full px-4 py-3 rounded-lg transition-colors ${activeTab === item.id
                     ? 'bg-blue-500/20 text-blue-400'
                     : 'text-gray-400 hover:text-white hover:bg-gray-800'
-                }`}
+                  }`}
               >
                 {item.icon}
                 <span className="font-medium">{item.label}</span>

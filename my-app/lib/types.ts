@@ -1,4 +1,10 @@
-// Types for the AI-Based Intrusion Detection System
+/**
+ * Types for the AI-Based Intrusion Detection System
+ */
+
+// ============================================
+// Network Types
+// ============================================
 
 export interface NetworkPacket {
   id: string;
@@ -28,6 +34,10 @@ export interface NetworkFlow {
   flowEnd: Date;
 }
 
+// ============================================
+// Detection Types
+// ============================================
+
 export interface DetectionResult {
   id: string;
   timestamp: Date;
@@ -39,9 +49,16 @@ export interface DetectionResult {
   detectionMethod: DetectionMethod;
   description: string;
   recommendations: string[];
+  modelScores?: {
+    isolationForest: number;
+    autoencoder: number;
+    kMeans: number;
+    knn: number;
+  };
+  autoResponseAction?: 'blocked' | 'alerted' | 'monitored' | 'ignored';
 }
 
-export type AttackType = 
+export type AttackType =
   | 'DoS'
   | 'DDoS'
   | 'Probe'
@@ -56,11 +73,16 @@ export type AttackType =
   | 'Man-in-the-Middle'
   | 'Unknown';
 
-export type DetectionMethod = 
+export type DetectionMethod =
   | 'Isolation Forest'
   | 'Autoencoder'
   | 'K-Means Clustering'
+  | 'KNN'
   | 'Ensemble';
+
+// ============================================
+// ML Model Types
+// ============================================
 
 export interface MLModelMetrics {
   method: DetectionMethod;
@@ -69,8 +91,19 @@ export interface MLModelMetrics {
   recall: number;
   f1Score: number;
   falsePositiveRate: number;
-  detectionTime: number; // in milliseconds
+  detectionTime: number;
 }
+
+export interface ModelWeights {
+  isolationForest: number;
+  autoencoder: number;
+  kMeans: number;
+  knn: number;
+}
+
+// ============================================
+// System Types
+// ============================================
 
 export interface SystemStats {
   totalPacketsAnalyzed: number;
@@ -81,6 +114,8 @@ export interface SystemStats {
   cpuUsage: number;
   memoryUsage: number;
   uptime: number;
+  blockedIPs: number;
+  modelVersion: number;
 }
 
 export interface Alert {
@@ -93,7 +128,12 @@ export interface Alert {
   destIP: string;
   attackType: AttackType;
   status: 'new' | 'investigating' | 'resolved' | 'false-positive';
+  autoBlocked?: boolean;
 }
+
+// ============================================
+// Dataset Types
+// ============================================
 
 export interface DatasetInfo {
   name: string;
@@ -104,6 +144,10 @@ export interface DatasetInfo {
   normalRatio: number;
   attackRatio: number;
 }
+
+// ============================================
+// API Types
+// ============================================
 
 export interface AnalysisRequest {
   packets: NetworkPacket[];
@@ -124,15 +168,57 @@ export interface GeminiAnalysisResponse {
   technicalDetails: string;
 }
 
+// ============================================
+// Chart Types
+// ============================================
+
 export interface ChartDataPoint {
   time: string;
   normal: number;
   anomaly: number;
-  [key: string]: string | number;
+  blocked?: number;
+  [key: string]: string | number | undefined;
 }
 
 export interface ThreatDistribution {
   name: string;
   value: number;
   color: string;
+}
+
+// ============================================
+// RLHF Types
+// ============================================
+
+export interface RLHFFeedbackSubmission {
+  detectionId: string;
+  isCorrect: boolean;
+  correctLabel?: 'normal' | 'anomaly';
+  correctAttackType?: AttackType;
+  notes?: string;
+}
+
+// ============================================
+// Auto-Response Types
+// ============================================
+
+export interface AutoResponseSettings {
+  enabled: boolean;
+  threatThreshold: number;
+  autoBlockDuration: number;
+  blockOnCritical: boolean;
+  blockOnHigh: boolean;
+  blockOnMedium: boolean;
+}
+
+// ============================================
+// Training Types
+// ============================================
+
+export interface TrainingStatus {
+  enabled: boolean;
+  totalSamples: number;
+  lastTrainingTime: Date | null;
+  modelVersion: number;
+  pendingRetraining: boolean;
 }
