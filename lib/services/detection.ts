@@ -20,7 +20,7 @@ export function initializeDetector(): EnsembleDetector {
     if (!detector || !isInitialized) {
         detector = new EnsembleDetector(rlhfService.getWeights());
 
-        // Generate labeled training data for KNN
+        // Generate labeled training data
         const { features, labels, attackTypes } = generateLabeledTrainingData(500);
         detector.fit(features, labels, attackTypes);
 
@@ -71,16 +71,13 @@ export function detectAnomaly(
         case 'K-Means Clustering':
             score = prediction.scores.kMeans;
             break;
-        case 'KNN':
-            score = prediction.scores.knn;
-            break;
         default:
             score = prediction.score;
     }
 
     const isAnomaly = score > 0.5;
     const threatLevel = getThreatLevel(score);
-    const attackType = isAnomaly ? classifyAttack(packet, score, prediction.attackType) : undefined;
+    const attackType = isAnomaly ? classifyAttack(packet, score) : undefined;
 
     const result: DetectionResult = {
         id: crypto.randomUUID(),
@@ -96,8 +93,7 @@ export function detectAnomaly(
         modelScores: {
             isolationForest: prediction.scores.isolationForest,
             autoencoder: prediction.scores.autoencoder,
-            kMeans: prediction.scores.kMeans,
-            knn: prediction.scores.knn
+            kMeans: prediction.scores.kMeans
         }
     };
 
@@ -138,12 +134,7 @@ function getThreatLevel(score: number): 'low' | 'medium' | 'high' | 'critical' {
 /**
  * Classify the attack type
  */
-function classifyAttack(packet: NetworkPacket, score: number, knnPrediction?: string): AttackType {
-    // Use KNN prediction if available
-    if (knnPrediction) {
-        return knnPrediction as AttackType;
-    }
-
+function classifyAttack(packet: NetworkPacket, score: number): AttackType {
     // Heuristic-based classification
     if (packet.destPort === 22 && score > 0.7) return 'Brute Force';
     if (packet.destPort === 3389 && score > 0.7) return 'Brute Force';

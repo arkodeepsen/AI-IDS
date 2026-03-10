@@ -22,7 +22,6 @@ interface ModelWeights {
   isolationForest: number;
   autoencoder: number;
   kMeans: number;
-  knn: number;
 }
 
 export default function RLHFFeedbackPanel() {

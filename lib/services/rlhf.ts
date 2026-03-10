@@ -34,10 +34,9 @@ class RLHFService {
     private feedbackHistory: RLHFFeedback[] = [];
     private weightHistory: WeightHistory[] = [];
     private currentWeights: EnsembleWeights = {
-        isolationForest: 0.30,
-        autoencoder: 0.25,
-        kMeans: 0.20,
-        knn: 0.25
+        isolationForest: 0.35,
+        autoencoder: 0.30,
+        kMeans: 0.35
     };
     private learningRate: number = 0.05;
     private minAdjustmentThreshold: number = 10; // Min feedback before adjusting
@@ -76,8 +75,7 @@ class RLHFService {
         const methodPerformance: Record<string, { correct: number; total: number }> = {
             'Isolation Forest': { correct: 0, total: 0 },
             'Autoencoder': { correct: 0, total: 0 },
-            'K-Means Clustering': { correct: 0, total: 0 },
-            'KNN': { correct: 0, total: 0 }
+            'K-Means Clustering': { correct: 0, total: 0 }
         };
 
         for (const fb of recentFeedback) {
@@ -116,10 +114,6 @@ class RLHFService {
                 oldWeights.kMeans,
                 accuracies['K-Means Clustering'] / totalAccuracy
             );
-            this.currentWeights.knn = this.blend(
-                oldWeights.knn,
-                accuracies['KNN'] / totalAccuracy
-            );
 
             // Normalize weights
             this.normalizeWeights();
@@ -143,14 +137,12 @@ class RLHFService {
         const total =
             this.currentWeights.isolationForest +
             this.currentWeights.autoencoder +
-            this.currentWeights.kMeans +
-            this.currentWeights.knn;
+            this.currentWeights.kMeans;
 
         if (total > 0) {
             this.currentWeights.isolationForest /= total;
             this.currentWeights.autoencoder /= total;
             this.currentWeights.kMeans /= total;
-            this.currentWeights.knn /= total;
         }
     }
 
@@ -206,10 +198,9 @@ class RLHFService {
      */
     resetWeights(): void {
         this.currentWeights = {
-            isolationForest: 0.30,
-            autoencoder: 0.25,
-            kMeans: 0.20,
-            knn: 0.25
+            isolationForest: 0.35,
+            autoencoder: 0.30,
+            kMeans: 0.35
         };
 
         this.weightHistory.push({

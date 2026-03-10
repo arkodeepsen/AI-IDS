@@ -53,7 +53,6 @@ export interface DetectionResult {
     isolationForest: number;
     autoencoder: number;
     kMeans: number;
-    knn: number;
   };
   autoResponseAction?: 'blocked' | 'alerted' | 'monitored' | 'ignored';
 }
@@ -77,7 +76,6 @@ export type DetectionMethod =
   | 'Isolation Forest'
   | 'Autoencoder'
   | 'K-Means Clustering'
-  | 'KNN'
   | 'Ensemble';
 
 // ============================================
@@ -98,7 +96,6 @@ export interface ModelWeights {
   isolationForest: number;
   autoencoder: number;
   kMeans: number;
-  knn: number;
 }
 
 // ============================================

@@ -72,7 +72,7 @@ export default function Home() {
                     Anomaly Detection
                   </h3>
                   <p className="text-xs text-zinc-400">
-                    Comparison of IF, AE, K-Means, and KNN for intrusion detection.
+                    Comparison of Isolation Forest, Autoencoder, and K-Means for intrusion detection.
                   </p>
                 </div>
                 <div className="p-3 bg-zinc-800/50 rounded">
@@ -80,7 +80,7 @@ export default function Home() {
                     False-Positive Reduction
                   </h3>
                   <p className="text-xs text-zinc-400">
-                    Ensemble approach combining 4 ML techniques.
+                    Ensemble approach combining 3 ML techniques.
                   </p>
                 </div>
                 <div className="p-3 bg-zinc-800/50 rounded">
@@ -207,7 +207,7 @@ export default function Home() {
             </div>
             <div className="flex items-center gap-4 text-xs text-zinc-600">
               <span>NSL-KDD & CICIDS</span>
-              <span>KNN + RLHF</span>
+              <span>K-Means + RLHF</span>
               <span>Gemini AI</span>
             </div>
           </div>

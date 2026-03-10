@@ -7,7 +7,6 @@
 export { IsolationForest, IsolationTree } from './isolation-forest';
 export { Autoencoder } from './autoencoder';
 export { KMeansClustering } from './kmeans';
-export { KNNClassifier, type KNNDataPoint } from './knn';
 export { EnsembleDetector, type EnsembleWeights, type EnsemblePrediction } from './ensemble';
 
 // Feature extraction

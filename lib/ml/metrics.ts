@@ -47,15 +47,6 @@ export function getModelMetrics(): ModelMetricsData[] {
             detectionTime: 1.8
         },
         {
-            method: 'KNN',
-            accuracy: 0.9234,
-            precision: 0.9012,
-            recall: 0.9189,
-            f1Score: 0.9100,
-            falsePositiveRate: 0.0289,
-            detectionTime: 3.2
-        },
-        {
             method: 'Ensemble',
             accuracy: 0.9612,
             precision: 0.9445,

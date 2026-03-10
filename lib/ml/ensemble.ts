@@ -6,13 +6,11 @@
 import { IsolationForest } from './isolation-forest';
 import { Autoencoder } from './autoencoder';
 import { KMeansClustering } from './kmeans';
-import { KNNClassifier } from './knn';
 
 export interface EnsembleWeights {
     isolationForest: number;
     autoencoder: number;
     kMeans: number;
-    knn: number;
 }
 
 export interface EnsemblePrediction {
@@ -22,7 +20,6 @@ export interface EnsemblePrediction {
         isolationForest: number;
         autoencoder: number;
         kMeans: number;
-        knn: number;
     };
     attackType?: string;
 }
@@ -31,7 +28,6 @@ export class EnsembleDetector {
     private isolationForest: IsolationForest;
     private autoencoder: Autoencoder;
     private kMeans: KMeansClustering;
-    private knn: KNNClassifier;
     private weights: EnsembleWeights;
     private anomalyThreshold: number = 0.5;
 
@@ -39,14 +35,12 @@ export class EnsembleDetector {
         this.isolationForest = new IsolationForest(50, 128);
         this.autoencoder = new Autoencoder(7, 3);
         this.kMeans = new KMeansClustering(5, 50);
-        this.knn = new KNNClassifier(5);
 
         // Default weights - can be adjusted via RLHF
         this.weights = {
-            isolationForest: 0.30,
-            autoencoder: 0.25,
-            kMeans: 0.20,
-            knn: 0.25,
+            isolationForest: 0.35,
+            autoencoder: 0.30,
+            kMeans: 0.35,
             ...weights
         };
     }
@@ -59,21 +53,6 @@ export class EnsembleDetector {
         this.isolationForest.fit(data);
         this.autoencoder.fit(data, 50, 0.01);
         this.kMeans.fit(data);
-
-        // Train KNN with labels (if available) or generate pseudo-labels
-        if (labels && labels.length === data.length) {
-            this.knn.fit(data, labels, attackTypes);
-        } else {
-            // Generate pseudo-labels from unsupervised models
-            const pseudoLabels = data.map(point => {
-                const ifScore = this.isolationForest.predict(point);
-                const aeScore = Math.min(this.autoencoder.predict(point), 1);
-                const kmScore = Math.min(this.kMeans.predict(point), 1);
-                const avgScore = (ifScore + aeScore + kmScore) / 3;
-                return avgScore > 0.5;
-            });
-            this.knn.fit(data, pseudoLabels);
-        }
     }
 
     /**
@@ -83,15 +62,12 @@ export class EnsembleDetector {
         const ifScore = this.isolationForest.predict(point);
         const aeScore = Math.min(this.autoencoder.predict(point), 1);
         const kmScore = Math.min(this.kMeans.predict(point), 1);
-        const knnResult = this.knn.predict(point);
-        const knnScore = knnResult.confidence;
 
         // Weighted ensemble score
         const ensembleScore =
             this.weights.isolationForest * ifScore +
             this.weights.autoencoder * aeScore +
-            this.weights.kMeans * kmScore +
-            this.weights.knn * knnScore;
+            this.weights.kMeans * kmScore;
 
         const isAnomaly = ensembleScore > this.anomalyThreshold;
 
@@ -101,10 +77,8 @@ export class EnsembleDetector {
             scores: {
                 isolationForest: ifScore,
                 autoencoder: aeScore,
-                kMeans: kmScore,
-                knn: knnScore
-            },
-            attackType: knnResult.attackType
+                kMeans: kmScore
+            }
         };
     }
 
@@ -119,8 +93,6 @@ export class EnsembleDetector {
                 return Math.min(this.autoencoder.predict(point), 1);
             case 'K-Means Clustering':
                 return Math.min(this.kMeans.predict(point), 1);
-            case 'KNN':
-                return this.knn.getAnomalyScore(point);
             default:
                 return this.predict(point).score;
         }
@@ -138,7 +110,6 @@ export class EnsembleDetector {
             this.weights.isolationForest /= total;
             this.weights.autoencoder /= total;
             this.weights.kMeans /= total;
-            this.weights.knn /= total;
         }
     }
 
@@ -163,8 +134,7 @@ export class EnsembleDetector {
         return {
             isolationForest: this.isolationForest,
             autoencoder: this.autoencoder,
-            kMeans: this.kMeans,
-            knn: this.knn
+            kMeans: this.kMeans
         };
     }
 
@@ -175,15 +145,7 @@ export class EnsembleDetector {
         return (
             this.isolationForest.isTrained() &&
             this.autoencoder.isTrained() &&
-            this.kMeans.isTrained() &&
-            this.knn.isTrained()
+            this.kMeans.isTrained()
         );
-    }
-
-    /**
-     * Add training data to KNN (for online learning)
-     */
-    addKNNSample(features: number[], isAnomaly: boolean, attackType?: string): void {
-        this.knn.addTrainingPoint(features, isAnomaly, attackType);
     }
 }

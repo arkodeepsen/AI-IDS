@@ -17,12 +17,12 @@ export async function GET() {
       },
       research: {
         title: 'Comparative Analysis of ML Techniques for Network Intrusion Detection',
-        abstract: `This research compares four machine learning approaches for anomaly-based intrusion detection: 
-        Isolation Forest, Autoencoders, K-Means Clustering, and KNN. Our ensemble approach with RLHF achieves 
+        abstract: `This research compares three machine learning approaches for anomaly-based intrusion detection: 
+        Isolation Forest, Autoencoders, and K-Means Clustering. Our ensemble approach with RLHF achieves 
         ${(metrics.find(m => m.method === 'Ensemble')?.accuracy ?? 0 * 100).toFixed(2)}% accuracy with a 
         false positive rate of ${(metrics.find(m => m.method === 'Ensemble')?.falsePositiveRate ?? 0 * 100).toFixed(2)}%.`,
         contributions: [
-          'Novel ensemble method combining 4 ML techniques with dynamic RLHF weight adjustment',
+          'Novel ensemble method combining 3 ML techniques with dynamic RLHF weight adjustment',
           'Comprehensive comparison on NSL-KDD and CICIDS datasets',
           'False positive reduction through multi-model consensus',
           'Real-time detection capability with sub-10ms latency',
