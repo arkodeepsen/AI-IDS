@@ -1,10 +1,10 @@
 /**
- * Gradient Boosted Trees
+ * Gradient Boosted Trees — XGBoost-style implementation in pure TypeScript.
  *
- * A small XGBoost-style implementation in pure TypeScript. The library
- * package would pull in a native binding that complicates the demo build, so
- * we ship a hand-rolled boosted ensemble instead. Predictions are squashed
- * through a sigmoid to land in [0,1] for ensemble combination.
+ * The npm `xgboost` package wraps a C++ binding that complicates demo
+ * builds. We ship a hand-rolled boosted-trees ensemble instead. Each round
+ * fits a small regression stump to the negative gradient of log-loss; the
+ * cumulative logit is sigmoid-squashed into [0, 1] for ensemble combination.
  */
 
 interface BoostedLeaf {
@@ -89,16 +89,22 @@ class RegressionStump {
     let bestGain = -Infinity;
     let best: { feature: number; threshold: number } | null = null;
 
-    const totalSum = residuals.reduce((a, b) => a + b, 0);
-    const totalSqSum = residuals.reduce((a, b) => a + b * b, 0);
+    let totalSum = 0;
+    let totalSqSum = 0;
+    for (const r of residuals) {
+      totalSum += r;
+      totalSqSum += r * r;
+    }
     const baseVar = totalSqSum - (totalSum * totalSum) / residuals.length;
 
     for (let f = 0; f < numFeatures; f++) {
-      const values = [...new Set(features.map(row => row[f]))].sort((a, b) => a - b);
+      const seen = new Set<number>();
+      for (const row of features) seen.add(row[f]);
+      const sorted = Array.from(seen).sort((a, b) => a - b);
       const candidates =
-        values.length > 6
-          ? Array.from({ length: 6 }, (_, i) => values[Math.floor((i + 1) * values.length / 7)])
-          : values;
+        sorted.length > 6
+          ? Array.from({ length: 6 }, (_, i) => sorted[Math.floor(((i + 1) * sorted.length) / 7)])
+          : sorted;
 
       for (const t of candidates) {
         let leftSum = 0,
@@ -131,6 +137,14 @@ class RegressionStump {
   }
 }
 
+export interface SerialisedGradientBoosting {
+  numRounds: number;
+  learningRate: number;
+  maxDepth: number;
+  base: number;
+  stumps: BoostedNode[];
+}
+
 export class GradientBoosting {
   private stumps: RegressionStump[] = [];
   private learningRate: number;
@@ -149,14 +163,12 @@ export class GradientBoosting {
     if (features.length === 0) return;
     const y: number[] = labels.map(l => (l ? 1 : 0));
     const meanY = y.reduce((a: number, b: number) => a + b, 0) / y.length;
-    // Logit of base rate so the very first prediction starts near the mean.
     this.base = Math.log((meanY + 1e-6) / (1 - meanY + 1e-6));
 
     const f = features.map(() => this.base);
     this.stumps = [];
 
     for (let r = 0; r < this.numRounds; r++) {
-      // Negative gradient for log-loss with sigmoid link is (y - p).
       const residuals = f.map((logit, i) => y[i] - this.sigmoid(logit));
       const stump = new RegressionStump(this.maxDepth, 4);
       stump.fit(features, residuals);
@@ -184,5 +196,27 @@ export class GradientBoosting {
 
   private sigmoid(x: number): number {
     return 1 / (1 + Math.exp(-Math.max(-50, Math.min(50, x))));
+  }
+
+  serialise(): SerialisedGradientBoosting {
+    return {
+      numRounds: this.numRounds,
+      learningRate: this.learningRate,
+      maxDepth: this.maxDepth,
+      base: this.base,
+      stumps: this.stumps.map(s => s.root),
+    };
+  }
+
+  static deserialise(data: SerialisedGradientBoosting): GradientBoosting {
+    const g = new GradientBoosting(data.numRounds, data.learningRate, data.maxDepth);
+    g.base = data.base;
+    g.stumps = data.stumps.map(root => {
+      const s = new RegressionStump(data.maxDepth, 4);
+      s.root = root;
+      return s;
+    });
+    g.trained = true;
+    return g;
   }
 }

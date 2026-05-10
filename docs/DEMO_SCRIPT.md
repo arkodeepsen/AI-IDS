@@ -1,117 +1,126 @@
 # Demo script — 8 minutes
 
 Goal: convince the evaluator that the system performs **end-to-end**
-intrusion detection with a working ML ensemble, real persistence, autonomous
-response, and a learning loop.
+intrusion detection with a working ensemble *trained on NSL-KDD*, real
+persistence, autonomous response, and a learning loop.
 
 ## 0. Before the panel walks in
 
 ```bash
-npm install                          # if first time on this machine
-npx prisma migrate dev --name init   # one-time DB bootstrap
-npm run dev                          # localhost:3000
+npm install
+npx prisma migrate deploy
+npm run dev
 ```
 
-Open the browser to <http://localhost:3000>, click **Seed Database** in the
-"Live Control Center" panel. You'll see "Seeded ~1650 packets (~250 anomalies,
-~12 auto-blocked)". The dashboard now has a week of history pre-loaded.
+(`npm run train` is optional — pre-trained model files ship in `models/`.)
 
-Have these tabs of the dashboard ready in your head: **Dashboard**,
-**Detections**, **ML Models**, **Auto-Response**, **AI Assistant**.
+Open <http://localhost:3000>, click **Seed Database** in the Live Control
+Center. You'll see something like
+"Seeded 1650 packets · 511 anomalies · 289 auto-blocked." That's because
+the trained NSL-KDD ensemble is now scoring real synthetic traffic.
 
-## 1. The Dashboard (2 min)
+## 1. Headline numbers (2 min)
 
-> "This is the live operator console. Six summary cards across the top —
-> total packets, threats, threat level, blocked IPs, packets per second,
-> API latency. They're all driven by the SQLite database, not a simulation."
+Switch to the **ML Models** tab first. Point at the per-model cards:
+
+> "These numbers are computed from a real evaluation. We trained on 25 000
+> stratified samples from NSL-KDD KDDTrain+, evaluated on 8 000 held-out
+> samples from KDDTest+, and the trainer wrote `models/metrics.json` —
+> which is what this dashboard reads."
+
+| Method            | Acc     | F1      | FPR    |
+|-------------------|--------:|--------:|-------:|
+| Isolation Forest  |  80.94% |  83.75% | 25.53% |
+| Autoencoder NN    |  78.75% |  81.45% | 24.82% |
+| Random Forest     |  86.21% |  87.22% |  8.28% |
+| XGBoost           |  86.91% |  88.55% | 14.99% |
+| **Ensemble**      | **90.99%** | **92.57%** | 18.41% |
+
+> "The supervised models — Random Forest and XGBoost — have the strongest
+> precision and lowest false-positive rates. The unsupervised members,
+> Isolation Forest and the Autoencoder, contribute high recall on novel
+> attacks. The ensemble combines them: **97.99% recall, 92.57% F1**."
+
+NSL-KDD test is famously harder than train (it contains novel attack
+classes). 90% accuracy on this benchmark is in the upper range of
+published ensemble methods.
+
+## 2. The Dashboard (1.5 min)
+
+Switch back to **Dashboard**. Six summary cards, real DB-backed:
+Total Packets, Threats Detected, Threat Level, Blocked IPs, Packets/sec, Latency.
 
 Point at:
-- **Live Control Center** — three buttons: Start Replay, Generate Attack ▾, Re-seed.
-- **Detections Over Time chart** — bucketed from the actual detection log.
-- **ML Ensemble Pipeline donut** — matches the slide-deck visual exactly.
-- **Live Detection Feed** + **Blocked IPs panel** at the bottom.
+- **Live Control Center** — Start Replay / Generate Attack ▾ / Seed.
+- **Detections Over Time** — bucketed from the actual SQLite log.
+- **ML Ensemble Pipeline donut** — matches the slide-deck visual: 30/25/25/20.
+- **Detection Feed** + **Blocked IPs panel**.
 
-Click **Start Replay**. The activity log starts ticking; the chart shifts.
+Click **Start Replay**.
 
-## 2. The synthetic attack (1.5 min)
-
-> "Now I want to show what happens during an attack."
+## 3. The synthetic attack (1.5 min)
 
 Click **Generate Attack ▾ → DDoS Burst**. Within a second:
-- Activity log: "DDoS: 40/40 flagged · X critical · Y auto-blocked."
-- Stats cards bump: Threats Detected jumps by ~40, Blocked IPs by 1+.
-- Detection Feed fills with new red rows tagged `Anomaly · Auto-blocked`.
-- Blocked IPs panel adds the attacker's source IP with `Auto`/`DoS` tags.
+- Activity log: "DDoS: 40/40 flagged · 40 high · 40 auto-blocked."
+- Blocked IPs panel adds 40 entries.
+- Detection Feed shows red DDoS rows.
 
-Repeat with **Port Scan** for variety.
+> "Each of those packets was vectorised into the 72-dimensional NSL-KDD
+> feature space and run through the four trained models. Notice the
+> autoencoder saturates at 1.0 because the reconstruction error is high,
+> Random Forest votes 0.8, XGBoost 0.79."
 
-> "The system caught 100 % of the DDoS packets. Notice the per-model scores
-> when you expand any detection — the Random Forest and XGBoost both vote
-> > 80 % attack probability, the Isolation Forest sees the statistical
-> outlier, and the Autoencoder confirms via reconstruction error."
+Click any detection row to expand it — the per-model scores are visible.
 
-Click any detection's row — the expanded view shows per-model scores, the
-description, recommendations, and (on the Detections tab) Confirm/Dismiss
-buttons.
+Repeat with **Port Scan** and **Brute Force**.
 
-## 3. The Active Learning loop (1.5 min)
+> "Brute Force scores in the 60-65% range — slightly lower confidence
+> because R2L attacks have features that overlap with normal SSH traffic.
+> The system flags it but the operator can tighten the auto-response
+> threshold if they want fewer false positives."
 
-Switch to the **Detections** tab.
+## 4. Active Learning (1.5 min)
 
-> "This is the Active Learning queue. Operators validate, dismiss or correct
-> each anomaly. Every click is fed back into the ensemble."
+Switch to **Detections**.
 
-Click **Confirm** on 2 anomalies, **Dismiss** on 1. After the demo turn,
-switch to the **ML Models** tab. Point at the RLHF panel — the
-"Confirmed" / "Dismissed" / "Accuracy" counters reflect what you just did.
+> "This is the Active Learning queue. The operator validates, dismisses or
+> corrects each anomaly. Every click is fed back into the ensemble."
 
-Click **Force re-balance**. The four weight bars shift visibly.
+Confirm 2 anomalies, dismiss 1. Switch to **ML Models** → the RLHF panel
+counters update. Click **Force re-balance** — the four weight bars shift.
 
-> "After every 10 verified samples the system automatically reblends the
-> weights toward whichever model performed best on operator feedback. The
-> defaults are 30 / 25 / 25 / 20 — those track exactly what's in the slide
-> deck."
-
-## 4. Model performance (1 min)
-
-Same tab. Point at the **Model Comparison** chart and the per-model cards.
-
-> "We benchmarked each member individually plus the ensemble. The ensemble
-> reaches **98.42 % accuracy** with a false-positive rate of **0.89 %** on
-> NSL-KDD — roughly 4 percentage points better than any single model. Latency
-> is under 10 ms per packet."
-
-Click **Retrain Models**. Within seconds the panel shows
-"Retrained on N samples in Xms · v2".
+> "Every 10 verified samples the system reblends weights toward whichever
+> model performed best on operator feedback. Defaults are 30/25/25/20,
+> matching the slide deck."
 
 ## 5. Auto-response (1 min)
 
-Switch to the **Auto-Response** tab.
+**Auto-Response** tab.
 
-> "The auto-response engine maps severity to action. Critical → permanent
-> block. High → 24-hour timed block. Medium → alert. Low → log only. The
-> threshold and durations are tunable."
+> "Severity → action. Critical → permanent block. High → 24-hour. Medium →
+> alerts (and during the demo, blocks). The blocked IPs you saw earlier
+> are here with their expiry timestamps."
 
-Drag the **Threat Threshold** slider; toggle the per-severity switches.
-Show the Blocked IPs table — the attacker IPs from the demo are there with
-expiry timestamps.
+Drag the threshold slider to demonstrate it's tunable.
 
 ## 6. AI explanation (30 s)
 
-Switch to the **AI Assistant** tab. Type:
+**AI Assistant** tab. Type:
 
-> "Explain a SYN flood attack and how this system would catch it."
+> "Explain a SYN flood and how this system would catch it."
 
-The Gemini integration responds in 2-3 paragraphs (or, if offline, the
-canned-response stub returns a coherent answer).
+Gemini returns a 2-3 paragraph answer (or, if offline, the canned-response
+stub returns a coherent answer keyed by intent).
 
 ## 7. Wrap (30 s)
 
-> "To recap: real-time ensemble detection across four ML algorithms, a SQLite
-> persistence layer, severity-driven autonomous response, an Active Learning
-> loop closing the feedback gap, and an AI assistant for triage. Future
-> work — LSTM / Transformer for sequence modelling, multi-tenant
-> deployment, distributed detection across nodes."
+> "To recap: a four-model ensemble — IF + AE + RF + XGBoost — trained on
+> NSL-KDD with stratified oversampling for the rare classes. 91% ensemble
+> accuracy, 98% recall, F1 92.57% on the held-out test set. Real-time
+> packet-to-flow projection, severity-driven autonomous response, and an
+> Active Learning loop that closes the feedback gap. Future work: LSTM
+> sequence modelling, multi-tenant deployment, CICIDS cross-dataset
+> evaluation."
 
 ---
 
@@ -119,21 +128,23 @@ canned-response stub returns a coherent answer).
 
 | Question | Answer |
 |---|---|
-| Where's the live packet capture? | "Replaced with a synthetic generator for the demo because live capture needs admin + Npcap on Windows. Same data shape goes through the same ensemble — swap the source for `pcap-parser` and nothing else changes." |
-| Why TypeScript instead of Python for ML? | "The four algorithms — IF, AE, RF, XGB — are simple enough to ship in pure TS. Removes a process boundary, lets the demo run on any laptop with Node 20+, and keeps end-to-end latency under 10 ms." |
-| Why SQLite? | "Zero-config single-file DB so the demo runs anywhere. Prisma abstracts the layer — production swaps the connection URL and adapter to Postgres." |
-| Where's the Chrome extension? | "Built and shipped in `chrome-extension/` (Manifest V3). Disabled from the demo path because MV3 service workers kill long-lived WebSockets — the dashboard's polling provides equivalent UX." |
-| Where's the Gemini key? | "Optional — set `GEMINI_API_KEY` in `.env`. If absent, the assistant returns deterministic on-topic responses so the dashboard stays usable offline." |
-| Was this trained on NSL-KDD? | "Trained on a synthetic NSL-KDD-shaped distribution we generate at runtime so anyone can reproduce. The headline metrics in the Model Comparison panel are baselines from real NSL-KDD experiments referenced in the literature." |
+| Did you actually train on NSL-KDD? | "Yes. KDDTrain+ has 125 973 rows; we stratified-subsample 25 000 with R2L/U2R oversampled 6× to handle the class imbalance, train all four models, evaluate on 8 000 KDDTest+ samples, and write the metrics to `models/metrics.json` which the dashboard reads. You can re-run `npm run train` and watch the numbers update." |
+| Why is FPR so high (~25%) for IF/AE? | "Unsupervised models on NSL-KDD test see many novel attacks they weren't trained on. The ensemble's weighted vote brings the effective FPR down once you balance precision and recall. That said, our **Random Forest** alone has FPR 8.28% — that's the strongest single member." |
+| Why didn't you use SMOTE? | "We used random oversampling — duplicate R2L and U2R rows 6×. SMOTE would synthesise new samples in feature space, which gives better minority-class generalisation; we didn't ship it because the training pipeline is already getting 91% ensemble accuracy. Easy upgrade." |
+| Why TypeScript instead of Python+sklearn? | "Lets the demo run on any laptop with Node 20+, no Python toolchain, and keeps end-to-end inference under 10 ms. The four algorithms are simple enough to ship in pure TS." |
+| Why SQLite? | "Zero-config single-file DB so the demo runs anywhere. Prisma abstracts the layer — production swaps the URL and adapter for Postgres." |
+| Where's the live packet capture? | "Live capture needs admin + Npcap on Windows. The synthetic generator produces NSL-KDD-shape flow records through the same ensemble. Swap in `pcap-parser` for real PCAP and nothing else changes." |
+| Where's the Chrome extension? | "Built in `chrome-extension/` (Manifest V3). Disabled from the demo path — MV3 service workers kill long-lived WebSockets. The dashboard's polling provides equivalent UX." |
+| Where's the Gemini key? | "Optional. Set `GEMINI_API_KEY` in `.env`. Without it the assistant returns deterministic on-topic responses." |
+| What about CICIDS? | "CICIDS-2017 cross-dataset evaluation is in the future scope. The Datasets tab references it for context. NSL-KDD was the primary benchmark because it's the de-facto IDS evaluation set with a stable train/test split." |
 
 ---
 
 ## If everything breaks at 3 AM
 
 The minimum viable demo is:
-1. Dashboard tab loads with seeded data
-2. Generate Attack → DDoS button produces visible row in Detection Feed
-3. ML Models tab shows the metric cards
+1. Dashboard tab loads with seeded data.
+2. Generate Attack → DDoS button produces visible red rows in the feed.
+3. ML Models tab shows the metric cards from the trained models.
 
-Everything else is gravy. Cut tabs in this order if you must: Datasets,
-Training, Auto-Response, AI Assistant.
+Cut tabs in this order if you must: Datasets, Training, Auto-Response, AI Assistant.

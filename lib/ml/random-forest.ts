@@ -1,10 +1,11 @@
 /**
- * Random Forest classifier
+ * Random Forest classifier — pure TypeScript.
  *
- * Pure TypeScript implementation. Each tree is grown on a bootstrap sample
- * with feature subsampling at every split. Predictions return the proportion
- * of trees that voted "anomaly", which lets the ensemble use it as a [0,1]
- * anomaly score alongside the unsupervised models.
+ * Each tree is grown on a bootstrap sample of the training data with
+ * feature subsampling at every split. Predictions return the proportion
+ * of trees voting "attack", which is used as a [0, 1] anomaly score by the
+ * ensemble. The model also retains the most-common attack type at each leaf
+ * so it can offer a coarse classification.
  */
 
 interface SplitNode {
@@ -17,9 +18,7 @@ interface SplitNode {
 
 interface LeafNode {
   kind: 'leaf';
-  /** Probability this leaf is an attack (1 = attack, 0 = normal). */
   attackProb: number;
-  /** Most common attack type at this leaf, if any. */
   attackType?: string;
 }
 
@@ -32,7 +31,7 @@ interface DecisionTreeOptions {
 }
 
 class DecisionTree {
-  private root: TreeNode = { kind: 'leaf', attackProb: 0 };
+  root: TreeNode = { kind: 'leaf', attackProb: 0 };
   private options: DecisionTreeOptions;
 
   constructor(options: DecisionTreeOptions) {
@@ -62,7 +61,8 @@ class DecisionTree {
       return { kind: 'leaf', attackProb: 0 };
     }
 
-    const attackCount = labels.reduce((acc, l) => acc + l, 0);
+    let attackCount = 0;
+    for (const l of labels) attackCount += l;
     const attackProb = attackCount / n;
     const attackType = this.majorityAttackType(labels, attackTypes);
 
@@ -120,13 +120,13 @@ class DecisionTree {
     let best: { feature: number; threshold: number } | null = null;
 
     for (const f of featureIdx) {
-      const values = features.map(row => row[f]);
-      const sorted = [...new Set(values)].sort((a, b) => a - b);
-      // Try a handful of candidate thresholds; full grid search is wasteful
-      // on continuous features.
-      const candidates = sorted.length > 8
-        ? Array.from({ length: 8 }, (_, i) => sorted[Math.floor((i + 1) * sorted.length / 9)])
-        : sorted;
+      const seen = new Set<number>();
+      for (const row of features) seen.add(row[f]);
+      const sorted = Array.from(seen).sort((a, b) => a - b);
+      const candidates =
+        sorted.length > 8
+          ? Array.from({ length: 8 }, (_, i) => sorted[Math.floor(((i + 1) * sorted.length) / 9)])
+          : sorted;
 
       for (const t of candidates) {
         const gini = this.weightedGini(features, labels, f, t);
@@ -196,15 +196,24 @@ class DecisionTree {
   }
 }
 
+export interface SerialisedRandomForest {
+  numTrees: number;
+  maxDepth: number;
+  minSamplesSplit: number;
+  featuresPerSplit: number;
+  trees: TreeNode[];
+}
+
 export class RandomForest {
   private trees: DecisionTree[] = [];
   private trained = false;
+  private featuresPerSplit = 0;
 
   constructor(
-    private numTrees: number = 30,
-    private maxDepth: number = 8,
-    private minSamplesSplit: number = 4,
-    private featureFraction: number = 0.7
+    private numTrees = 30,
+    private maxDepth = 8,
+    private minSamplesSplit = 4,
+    private featureFraction = 0.7
   ) {}
 
   fit(features: number[][], labels: boolean[], attackTypes?: string[]): void {
@@ -214,7 +223,7 @@ export class RandomForest {
     }
 
     const numFeatures = features[0].length;
-    const featuresPerSplit = Math.max(1, Math.round(numFeatures * this.featureFraction));
+    this.featuresPerSplit = Math.max(1, Math.round(numFeatures * this.featureFraction));
 
     const intLabels = labels.map(l => (l ? 1 : 0));
     const types = attackTypes ?? labels.map(() => '');
@@ -232,7 +241,7 @@ export class RandomForest {
       const tree = new DecisionTree({
         maxDepth: this.maxDepth,
         minSamplesSplit: this.minSamplesSplit,
-        featuresPerSplit,
+        featuresPerSplit: this.featuresPerSplit,
       });
       tree.fit(sampleX, sampleY, sampleA);
       this.trees.push(tree);
@@ -240,7 +249,6 @@ export class RandomForest {
     this.trained = true;
   }
 
-  /** Returns the probability the point is an attack, in [0,1]. */
   predict(point: number[]): { attackProb: number; attackType?: string } {
     if (!this.trained || this.trees.length === 0) {
       return { attackProb: 0.5 };
@@ -274,5 +282,31 @@ export class RandomForest {
 
   isTrained(): boolean {
     return this.trained;
+  }
+
+  serialise(): SerialisedRandomForest {
+    return {
+      numTrees: this.numTrees,
+      maxDepth: this.maxDepth,
+      minSamplesSplit: this.minSamplesSplit,
+      featuresPerSplit: this.featuresPerSplit,
+      trees: this.trees.map(t => t.root),
+    };
+  }
+
+  static deserialise(data: SerialisedRandomForest): RandomForest {
+    const f = new RandomForest(data.numTrees, data.maxDepth, data.minSamplesSplit);
+    f.featuresPerSplit = data.featuresPerSplit;
+    f.trees = data.trees.map(rootNode => {
+      const t = new DecisionTree({
+        maxDepth: data.maxDepth,
+        minSamplesSplit: data.minSamplesSplit,
+        featuresPerSplit: data.featuresPerSplit,
+      });
+      t.root = rootNode;
+      return t;
+    });
+    f.trained = true;
+    return f;
   }
 }

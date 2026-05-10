@@ -1,16 +1,22 @@
 /**
  * Ensemble Detector
  *
- * Combines four models — Isolation Forest, Autoencoder, Random Forest and
- * Gradient Boosting (XGBoost-style) — using the weights from the project
- * deck (30 / 25 / 25 / 20). The weights normalise to 1.0, and Active
- * Learning can shift them based on per-model accuracy.
+ * Combines four models — Isolation Forest, Autoencoder, Random Forest, and
+ * XGBoost-style Gradient Boosting — using the deck weights (30 / 25 / 25 / 20).
+ * Active Learning can shift them based on per-model accuracy.
+ *
+ * The class supports serialise/deserialise so that trained weights can be
+ * saved to disk after running the NSL-KDD trainer and loaded at server
+ * startup — no live retraining needed.
  */
 
-import { IsolationForest } from './isolation-forest';
-import { Autoencoder } from './autoencoder';
-import { RandomForest } from './random-forest';
-import { GradientBoosting } from './xgboost';
+import {
+  IsolationForest,
+  SerialisedIsolationForest,
+} from './isolation-forest';
+import { Autoencoder, SerialisedAutoencoder } from './autoencoder';
+import { RandomForest, SerialisedRandomForest } from './random-forest';
+import { GradientBoosting, SerialisedGradientBoosting } from './xgboost';
 
 export interface EnsembleWeights {
   isolationForest: number;
@@ -40,37 +46,50 @@ export const DEFAULT_WEIGHTS: EnsembleWeights = {
   xgboost: 0.2,
 };
 
+export interface SerialisedEnsemble {
+  weights: EnsembleWeights;
+  anomalyThreshold: number;
+  isolationForest: SerialisedIsolationForest;
+  autoencoder: SerialisedAutoencoder;
+  randomForest: SerialisedRandomForest;
+  xgboost: SerialisedGradientBoosting;
+  inputSize: number;
+}
+
 export class EnsembleDetector {
   private isolationForest: IsolationForest;
   private autoencoder: Autoencoder;
   private randomForest: RandomForest;
   private xgboost: GradientBoosting;
   private weights: EnsembleWeights;
-  // 0.45 puts the threshold just below the default ensemble score for an
-  // average-anomalous packet, which keeps recall high without making the
-  // dashboard chatter on benign noise.
   private anomalyThreshold = 0.45;
   private trained = false;
+  private inputSize: number;
 
-  constructor(weights?: Partial<EnsembleWeights>) {
-    this.isolationForest = new IsolationForest(50, 128);
-    this.autoencoder = new Autoencoder(7, 3);
-    this.randomForest = new RandomForest(25, 8, 4, 0.7);
-    this.xgboost = new GradientBoosting(40, 0.1, 4);
+  constructor(weights?: Partial<EnsembleWeights>, inputSize = 7) {
+    this.inputSize = inputSize;
+    this.isolationForest = new IsolationForest(50, 256);
+    this.autoencoder = new Autoencoder(inputSize, Math.max(3, Math.floor(inputSize / 3)));
+    this.randomForest = new RandomForest(30, 12, 4, 0.5);
+    this.xgboost = new GradientBoosting(60, 0.1, 5);
     this.weights = { ...DEFAULT_WEIGHTS, ...weights };
   }
 
   fit(features: number[][], labels?: boolean[], attackTypes?: string[]): void {
     if (features.length === 0) return;
+    if (features[0].length !== this.inputSize) {
+      this.inputSize = features[0].length;
+      this.autoencoder = new Autoencoder(
+        this.inputSize,
+        Math.max(3, Math.floor(this.inputSize / 3))
+      );
+    }
 
     this.isolationForest.fit(features);
-    this.autoencoder.fit(features, 50, 0.01);
+    this.autoencoder.fit(features, 30, 0.01);
 
-    // Supervised models need labels. If none provided, derive coarse labels by
-    // running Isolation Forest, so a one-shot demo still works without ground truth.
     const derivedLabels =
-      labels ??
-      features.map(point => this.isolationForest.predict(point) > 0.55);
+      labels ?? features.map(point => this.isolationForest.predict(point) > 0.55);
 
     this.randomForest.fit(features, derivedLabels, attackTypes);
     this.xgboost.fit(features, derivedLabels);
@@ -144,6 +163,10 @@ export class EnsembleDetector {
     this.anomalyThreshold = Math.max(0, Math.min(1, t));
   }
 
+  getInputSize(): number {
+    return this.inputSize;
+  }
+
   getModels() {
     return {
       isolationForest: this.isolationForest,
@@ -161,5 +184,43 @@ export class EnsembleDetector {
       this.randomForest.isTrained() &&
       this.xgboost.isTrained()
     );
+  }
+
+  /** Inject already-trained sub-models (used by the NSL-KDD trainer). */
+  setModels(models: {
+    isolationForest: IsolationForest;
+    autoencoder: Autoencoder;
+    randomForest: RandomForest;
+    xgboost: GradientBoosting;
+  }): void {
+    this.isolationForest = models.isolationForest;
+    this.autoencoder = models.autoencoder;
+    this.randomForest = models.randomForest;
+    this.xgboost = models.xgboost;
+    this.trained = true;
+  }
+
+  serialise(): SerialisedEnsemble {
+    return {
+      weights: { ...this.weights },
+      anomalyThreshold: this.anomalyThreshold,
+      isolationForest: this.isolationForest.serialise(),
+      autoencoder: this.autoencoder.serialise(),
+      randomForest: this.randomForest.serialise(),
+      xgboost: this.xgboost.serialise(),
+      inputSize: this.inputSize,
+    };
+  }
+
+  static deserialise(data: SerialisedEnsemble): EnsembleDetector {
+    const e = new EnsembleDetector(data.weights, data.inputSize);
+    e.weights = data.weights;
+    e.anomalyThreshold = data.anomalyThreshold;
+    e.isolationForest = IsolationForest.deserialise(data.isolationForest);
+    e.autoencoder = Autoencoder.deserialise(data.autoencoder);
+    e.randomForest = RandomForest.deserialise(data.randomForest);
+    e.xgboost = GradientBoosting.deserialise(data.xgboost);
+    e.trained = true;
+    return e;
   }
 }

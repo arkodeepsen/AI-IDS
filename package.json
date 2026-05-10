@@ -13,6 +13,8 @@
     "db:migrate": "prisma migrate dev --name init",
     "db:reset": "prisma migrate reset --force",
     "db:studio": "prisma studio",
+    "data:download": "bash scripts/download-nslkdd.sh",
+    "train": "tsx scripts/train-nslkdd.ts",
     "postinstall": "prisma generate"
   },
   "dependencies": {
@@ -36,6 +38,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.1.1",
     "tailwindcss": "^4",
+    "tsx": "^4.21.0",
     "typescript": "^5"
   }
 }

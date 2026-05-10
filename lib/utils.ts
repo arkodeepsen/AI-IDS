@@ -1,4 +1,5 @@
 import { NetworkPacket, Alert, DatasetInfo } from './types';
+import { KddOverride } from './ml/packet-to-kdd';
 
 const PROTOCOLS: NetworkPacket['protocol'][] = [
   'TCP',
@@ -12,7 +13,6 @@ const PROTOCOLS: NetworkPacket['protocol'][] = [
 ];
 
 const NORMAL_FLAGS = ['SYN,ACK', 'ACK', 'FIN,ACK', 'PSH,ACK'];
-const SUSPICIOUS_FLAGS = ['SYN', 'FIN', 'RST', 'SYN,FIN', 'URG,PSH'];
 const COMMON_PORTS = [80, 443, 22, 21, 25, 53, 110, 143, 993, 995, 3306, 5432, 27017, 6379];
 const SUSPICIOUS_PORTS = [4444, 5555, 6666, 31337, 12345, 23, 3389];
 
@@ -32,43 +32,55 @@ function privateIP(): string {
   return pick(PRIVATE_PREFIXES) + Math.floor(Math.random() * 254 + 1);
 }
 
-function generateIP(suspicious: boolean): string {
-  if (suspicious && Math.random() < 0.6) {
-    return publicIP(); // attackers tend to be external
-  }
-  return Math.random() < 0.5 ? privateIP() : publicIP();
-}
-
-function getRandomPort(suspicious: boolean): number {
-  if (suspicious && Math.random() < 0.4) {
-    return pick(SUSPICIOUS_PORTS);
-  }
-  return pick(COMMON_PORTS);
-}
-
-function generateFlags(suspicious: boolean): string {
-  if (suspicious && Math.random() < 0.5) {
-    return pick(SUSPICIOUS_FLAGS);
-  }
-  return pick(NORMAL_FLAGS);
-}
+// Probability that a benign packet is a "noisy" one — slightly anomalous,
+// keeps the dashboard from looking too sterile but doesn't trip the detector.
+const NOISY_BENIGN_RATIO = 0.05;
 
 export function generateNetworkPacket(): NetworkPacket {
-  const isSuspicious = Math.random() < 0.18;
+  const noisy = Math.random() < NOISY_BENIGN_RATIO;
+
+  // Most fields stay in the "normal" NSL-KDD distribution. We stamp a
+  // matching kddOverride so the trained ensemble sees a benign flow.
+  const protocol = noisy
+    ? pick<NetworkPacket['protocol']>(['TCP', 'UDP', 'ICMP', 'HTTP'])
+    : pick<NetworkPacket['protocol']>(['TCP', 'HTTP', 'HTTPS', 'DNS']);
+  const destPort = pick(COMMON_PORTS);
+  const sourcePort = Math.floor(Math.random() * 50000) + 1024;
+  const packetSize = Math.floor(Math.random() * 1500) + 64;
+  const flags = pick(NORMAL_FLAGS);
+
+  const kdd: KddOverride = {
+    duration: Math.floor(Math.random() * 5),
+    src_bytes: packetSize,
+    dst_bytes: Math.floor(Math.random() * 4000),
+    logged_in: Math.random() < 0.6 ? 1 : 0,
+    count: Math.floor(Math.random() * 3) + 1,
+    srv_count: Math.floor(Math.random() * 3) + 1,
+    same_srv_rate: 1,
+    diff_srv_rate: 0,
+    serror_rate: 0,
+    srv_serror_rate: 0,
+    rerror_rate: 0,
+    srv_rerror_rate: 0,
+    dst_host_count: Math.floor(Math.random() * 30) + 1,
+    dst_host_srv_count: Math.floor(Math.random() * 30) + 1,
+    dst_host_same_srv_rate: 1,
+    dst_host_diff_srv_rate: 0,
+    dst_host_same_src_port_rate: Math.random() * 0.2,
+    label: 'normal',
+  };
+
   return {
     id: crypto.randomUUID(),
     timestamp: new Date(),
-    sourceIP: generateIP(isSuspicious),
+    sourceIP: publicIP(),
     destIP: privateIP(),
-    sourcePort: isSuspicious
-      ? Math.floor(Math.random() * 1024)
-      : Math.floor(Math.random() * 50000) + 1024,
-    destPort: getRandomPort(isSuspicious),
-    protocol: PROTOCOLS[Math.floor(Math.random() * (isSuspicious ? PROTOCOLS.length : 4))],
-    packetSize: isSuspicious
-      ? Math.floor(Math.random() * 60000) + 5000
-      : Math.floor(Math.random() * 1500) + 64,
-    flags: generateFlags(isSuspicious),
+    sourcePort: noisy ? Math.floor(Math.random() * 1024) : sourcePort,
+    destPort: noisy && Math.random() < 0.3 ? pick(SUSPICIOUS_PORTS) : destPort,
+    protocol,
+    packetSize,
+    flags,
+    kddOverride: kdd,
   };
 }
 
@@ -81,9 +93,9 @@ export function generatePacketBatch(count: number): NetworkPacket[] {
 // =========================================================================
 // Synthetic attack generators
 //
-// These produce packet patterns biased toward each attack archetype so that
-// the ensemble surfaces them as anomalies. Used by the "Generate Attack"
-// dashboard button to give the demo a dramatic on-cue moment.
+// Each generator produces a packet plus a kddOverride that lands the flow
+// inside the region of NSL-KDD feature space the trained ensemble flags as
+// the corresponding attack class.
 // =========================================================================
 
 export type SyntheticAttackKind = 'ddos' | 'portscan' | 'bruteforce';
@@ -102,63 +114,134 @@ export function generateSyntheticAttack(
   }
 }
 
-// The flag scoring in features.ts treats SYN=1, ACK=2, FIN=4, RST=8, PSH=16,
-// URG=32 normalised to /63 — so URG and PSH carry the highest weight. The
-// generators below pick flag combinations that produce HIGH normalised flag
-// scores so the trained models recognise them as the suspicious class.
-
+/** DDoS / DoS — modelled after NSL-KDD `neptune` (SYN flood). */
 function generateDDoSBatch(count: number): NetworkPacket[] {
   const target = privateIP();
-  const targetPort = pick([80, 443, 8080, 53]);
-  return Array.from({ length: count }, () => ({
-    id: crypto.randomUUID(),
-    timestamp: new Date(),
-    sourceIP: publicIP(),
-    destIP: target,
-    sourcePort: Math.floor(Math.random() * 64),
-    destPort: targetPort,
-    protocol: pick<NetworkPacket['protocol']>(['ICMP', 'ICMP', 'UDP']),
-    packetSize: 50000 + Math.floor(Math.random() * 15000),
-    flags: 'URG,PSH', // 48/63 — high
-  }));
+  const targetPort = pick([80, 443, 25, 21]);
+  return Array.from({ length: count }, () => {
+    const kdd: KddOverride = {
+      duration: 0,
+      src_bytes: 0,
+      dst_bytes: 0,
+      flag: 'S0', // half-open SYN
+      logged_in: 0,
+      count: 250 + Math.floor(Math.random() * 250),
+      srv_count: 250 + Math.floor(Math.random() * 250),
+      serror_rate: 1,
+      srv_serror_rate: 1,
+      rerror_rate: 0,
+      srv_rerror_rate: 0,
+      same_srv_rate: 1,
+      diff_srv_rate: 0,
+      dst_host_count: 255,
+      dst_host_srv_count: 255,
+      dst_host_same_srv_rate: 1,
+      dst_host_diff_srv_rate: 0,
+      dst_host_serror_rate: 1,
+      dst_host_srv_serror_rate: 1,
+      label: 'neptune',
+    };
+    return {
+      id: crypto.randomUUID(),
+      timestamp: new Date(),
+      sourceIP: publicIP(),
+      destIP: target,
+      sourcePort: Math.floor(Math.random() * 64),
+      destPort: targetPort,
+      protocol: 'TCP',
+      packetSize: 0,
+      flags: 'SYN',
+      kddOverride: kdd,
+    };
+  });
 }
 
+/** Port Scan — modelled after NSL-KDD `satan` / `ipsweep`. */
 function generatePortScanBatch(count: number): NetworkPacket[] {
   const source = publicIP();
   const target = privateIP();
-  return Array.from({ length: count }, (_, i) => ({
-    id: crypto.randomUUID(),
-    timestamp: new Date(),
-    sourceIP: source,
-    destIP: target,
-    sourcePort: Math.floor(Math.random() * 64),
-    // Stay within port 1-1024 to match the trained probe/portscan pattern.
-    destPort: 1 + (i * 7) % 1024,
-    protocol: 'TCP',
-    packetSize: 40 + Math.floor(Math.random() * 24),
-    flags: pick(['URG,PSH', 'URG', 'PSH']), // high flag scores
-  }));
+  return Array.from({ length: count }, (_, i) => {
+    const destPort = (i * 7 + 21) % 1024;
+    const kdd: KddOverride = {
+      duration: 0,
+      src_bytes: 0,
+      dst_bytes: 0,
+      flag: 'REJ',
+      logged_in: 0,
+      count: 60 + Math.floor(Math.random() * 60),
+      srv_count: 1,
+      serror_rate: 0,
+      srv_serror_rate: 0,
+      rerror_rate: 1,
+      srv_rerror_rate: 1,
+      same_srv_rate: 0.05,
+      diff_srv_rate: 0.95,
+      srv_diff_host_rate: 0.6,
+      dst_host_count: 255,
+      dst_host_srv_count: 1,
+      dst_host_same_srv_rate: 0.05,
+      dst_host_diff_srv_rate: 0.95,
+      dst_host_rerror_rate: 1,
+      dst_host_srv_rerror_rate: 1,
+      label: 'satan',
+    };
+    return {
+      id: crypto.randomUUID(),
+      timestamp: new Date(),
+      sourceIP: source,
+      destIP: target,
+      sourcePort: Math.floor(Math.random() * 64),
+      destPort,
+      protocol: 'TCP',
+      packetSize: 40,
+      flags: 'SYN',
+      kddOverride: kdd,
+    };
+  });
 }
 
+/** Brute Force — modelled after NSL-KDD `guess_passwd`. */
 function generateBruteForceBatch(count: number): NetworkPacket[] {
   const source = publicIP();
   const target = privateIP();
-  const targetPort = pick([22, 3389]);
-  return Array.from({ length: count }, () => ({
-    id: crypto.randomUUID(),
-    timestamp: new Date(),
-    sourceIP: source,
-    destIP: target,
-    sourcePort: Math.floor(Math.random() * 64),
-    destPort: targetPort,
-    protocol: targetPort === 22 ? 'SSH' : 'TCP',
-    packetSize: 180 + Math.floor(Math.random() * 80),
-    flags: 'URG,PSH',
-  }));
+  const targetPort = pick([22, 21, 23]);
+  return Array.from({ length: count }, () => {
+    const kdd: KddOverride = {
+      duration: 1 + Math.floor(Math.random() * 5),
+      src_bytes: 200 + Math.floor(Math.random() * 200),
+      dst_bytes: 100 + Math.floor(Math.random() * 100),
+      flag: 'SF',
+      logged_in: 0,
+      num_failed_logins: 4 + Math.floor(Math.random() * 5),
+      is_guest_login: 1,
+      count: 30 + Math.floor(Math.random() * 30),
+      srv_count: 30 + Math.floor(Math.random() * 30),
+      serror_rate: 0,
+      srv_serror_rate: 0,
+      rerror_rate: 0.1,
+      same_srv_rate: 1,
+      dst_host_count: 30 + Math.floor(Math.random() * 30),
+      dst_host_srv_count: 30 + Math.floor(Math.random() * 30),
+      dst_host_same_srv_rate: 1,
+      label: 'guess_passwd',
+    };
+    return {
+      id: crypto.randomUUID(),
+      timestamp: new Date(),
+      sourceIP: source,
+      destIP: target,
+      sourcePort: Math.floor(Math.random() * 60000) + 1024,
+      destPort: targetPort,
+      protocol: targetPort === 22 ? 'SSH' : 'TCP',
+      packetSize: 200 + Math.floor(Math.random() * 100),
+      flags: 'PSH,ACK',
+      kddOverride: kdd,
+    };
+  });
 }
 
 // =========================================================================
-// Mock alerts (used for dashboard demos before a real run is triggered)
+// Mock alerts (kept for the AlertsPanel demo before any detection runs)
 // =========================================================================
 
 export function generateAlert(isNew = true): Alert {
@@ -183,7 +266,7 @@ export function generateAlert(isNew = true): Alert {
     severity,
     title: `${attackType} attack detected`,
     message: `Suspicious ${attackType} pattern from public source.`,
-    sourceIP: generateIP(true),
+    sourceIP: publicIP(),
     destIP: privateIP(),
     attackType,
     status: pick(statuses),
@@ -198,7 +281,7 @@ export const datasets: DatasetInfo[] = [
   {
     name: 'NSL-KDD',
     description:
-      'Improved KDD Cup 99 with redundant records removed. 41 features per labelled connection.',
+      'Improved KDD Cup 99 with redundant records removed. 41 features per labelled connection. The system is trained on KDDTrain+ and evaluated on KDDTest+.',
     totalSamples: 148517,
     features: 41,
     attackTypes: ['DoS', 'Probe', 'R2L', 'U2R'],
