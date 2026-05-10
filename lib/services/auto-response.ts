@@ -47,11 +47,14 @@ class AutoResponseService {
     private blockEvents: BlockEvent[] = [];
     private config: AutoResponseConfig = {
         enabled: true,
-        threatThreshold: 0.85,
-        autoBlockDuration: 60, // 1 hour default
+        threatThreshold: 0.55,
+        autoBlockDuration: 60,
         blockOnCritical: true,
         blockOnHigh: true,
-        blockOnMedium: false,
+        // Block on medium too — NSL-KDD R2L attacks (brute force, etc.) often
+        // score medium because their features overlap with normal traffic.
+        // Operators can tighten this in the Auto-Response tab.
+        blockOnMedium: true,
         notifyOnBlock: true,
         whitelistedIPs: ['127.0.0.1', 'localhost']
     };

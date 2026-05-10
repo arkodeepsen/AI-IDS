@@ -32,6 +32,7 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
 
 # vercel
 .vercel
@@ -41,3 +42,13 @@ yarn-error.log*
 next-env.d.ts
 
 /lib/generated/prisma
+
+# prisma dev database (recreate via npx prisma migrate dev)
+prisma/dev.db
+prisma/dev.db-journal
+*.db
+*.db-journal
+
+# NSL-KDD raw data (download with `npm run data:download`)
+data/KDDTrain+.txt
+data/KDDTest+.txt

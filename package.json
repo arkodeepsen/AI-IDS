@@ -1,30 +1,34 @@
 {
-  "name": "app",
-  "version": "0.1.0",
+  "name": "ai-ids",
+  "version": "1.0.0",
   "private": true,
-  "description": "This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).",
-  "license": "ISC",
-  "author": "",
-  "type": "commonjs",
-  "main": "index.js",
-  "directories": {
-    "lib": "lib"
-  },
+  "description": "AI-Based Intrusion Detection System with ensemble ML and Active Learning.",
+  "type": "module",
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "prisma generate && next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "db:push": "prisma db push --skip-generate",
+    "db:migrate": "prisma migrate dev --name init",
+    "db:reset": "prisma migrate reset --force",
+    "db:studio": "prisma studio",
+    "data:download": "bash scripts/download-nslkdd.sh",
+    "train": "tsx scripts/train-nslkdd.ts",
+    "train:lstm": "tsx scripts/train-lstm.ts",
+    "train:cicids": "tsx scripts/train-cicids.ts",
+    "prepare:cicids": "tsx scripts/prepare-cicids.ts",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
-    "@neondatabase/serverless": "^1.0.2",
-    "@prisma/adapter-neon": "^7.2.0",
-    "@prisma/client": "^7.2.0",
+    "@prisma/adapter-better-sqlite3": "^7.8.0",
+    "@prisma/client": "^7.8.0",
+    "better-sqlite3": "^12.9.0",
     "dotenv": "^17.2.3",
     "lucide-react": "^0.562.0",
     "next": "16.1.1",
-    "prisma": "^7.2.0",
+    "prisma": "^7.8.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "recharts": "^3.6.0"
@@ -37,6 +41,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.1.1",
     "tailwindcss": "^4",
+    "tsx": "^4.21.0",
     "typescript": "^5"
   }
 }

@@ -1,30 +1,51 @@
 @import "tailwindcss";
 
 :root {
-  --background: #0a0a0a;
+  --background: #07101e;
   --foreground: #fafafa;
   --muted: #71717a;
   --border: #27272a;
-  --card: #18181b;
-  --accent: #3b82f6;
+  --card: #0f1626;
+  --accent: #22d3ee;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", "Courier New", monospace;
 }
 
 body {
-  background: var(--background);
+  background:
+    radial-gradient(ellipse at top, #0a1628 0%, #050a14 60%, #03060d 100%);
   color: var(--foreground);
-  font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  min-height: 100vh;
 }
 
-/* Custom scrollbar - minimal */
+/* Subtle grid backdrop reminiscent of the slide deck */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(34, 211, 238, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(34, 211, 238, 0.04) 1px, transparent 1px);
+  background-size: 48px 48px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+main {
+  position: relative;
+  z-index: 1;
+}
+
 .custom-scrollbar::-webkit-scrollbar {
   width: 4px;
 }
@@ -42,27 +63,26 @@ body {
   background: #52525b;
 }
 
-/* Minimal fade in animation */
 @keyframes fade-in {
   from {
     opacity: 0;
+    transform: translateY(2px);
   }
   to {
     opacity: 1;
+    transform: translateY(0);
   }
 }
 
 .fade-in {
-  animation: fade-in 0.2s ease-out;
+  animation: fade-in 0.25s ease-out;
 }
 
-/* Focus ring for accessibility */
 .focus-ring:focus {
   outline: none;
   box-shadow: 0 0 0 2px var(--background), 0 0 0 4px var(--accent);
 }
 
-/* Status indicator */
 .status-dot {
   width: 6px;
   height: 6px;
@@ -71,6 +91,7 @@ body {
 
 .status-dot.active {
   background-color: #22c55e;
+  box-shadow: 0 0 6px rgba(34, 197, 94, 0.6);
 }
 
 .status-dot.warning {

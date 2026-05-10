@@ -1,26 +1,68 @@
 /**
- * ML Module Barrel Export
- * Central export point for all ML algorithms and utilities
+ * ML module barrel export.
  */
 
-// Algorithms
-export { IsolationForest, IsolationTree } from './isolation-forest';
-export { Autoencoder } from './autoencoder';
-export { KMeansClustering } from './kmeans';
-export { EnsembleDetector, type EnsembleWeights, type EnsemblePrediction } from './ensemble';
-
-// Feature extraction
 export {
-    extractFeatures,
-    extractExtendedFeatures,
-    normalizeFeatures,
-    calculateFeatureStats,
-    ipToNumber,
-    flagsToNumber
+  IsolationForest,
+  IsolationTree,
+  type SerialisedIsolationForest,
+} from './isolation-forest';
+export { Autoencoder, type SerialisedAutoencoder } from './autoencoder';
+export { KMeansClustering } from './kmeans';
+export { RandomForest, type SerialisedRandomForest } from './random-forest';
+export { GradientBoosting, type SerialisedGradientBoosting } from './xgboost';
+export {
+  EnsembleDetector,
+  DEFAULT_WEIGHTS,
+  type EnsembleWeights,
+  type EnsemblePrediction,
+  type EnsembleScores,
+  type SerialisedEnsemble,
+} from './ensemble';
+
+export {
+  extractFeatures,
+  extractKddFeatures,
+  extractLegacyFeatures,
+  extractExtendedFeatures,
+  normalizeFeatures,
+  calculateFeatureStats,
+  ipToNumber,
+  flagsToNumber,
 } from './features';
 
-// Training data generation
 export { generateTrainingData, generateLabeledTrainingData } from './training-data';
-
-// Model metrics
 export { getModelMetrics, type ModelMetricsData } from './metrics';
+export {
+  loadTrainedArtefacts,
+  getCachedMetrics,
+  type TrainedMetric,
+  type TrainedMetrics,
+} from './loader';
+export { packetToKddRow, type KddOverride } from './packet-to-kdd';
+export { LSTMClassifier, type SerialisedLSTM } from './lstm';
+export { loadLSTM, getLSTMMetrics, type LSTMMetrics } from './lstm-loader';
+export {
+  computeIpEntropy,
+  octetEntropy,
+  recordAndScoreSource,
+  resetEntropyCache,
+  type IpEntropyScores,
+} from './ip-entropy';
+export {
+  parseKDDRow,
+  vectorise,
+  fitScaler,
+  loadCsvText,
+  buildDataset,
+  classifyLabel,
+  FEATURE_LENGTH,
+  PROTOCOL_TYPES,
+  SERVICES,
+  FLAGS,
+  NUMERIC_FEATURE_NAMES,
+  type KDDRow,
+  type FeatureScaler,
+  type AttackClass,
+  type ParsedDataset,
+} from './nsl-kdd';
