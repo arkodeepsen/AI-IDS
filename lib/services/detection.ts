@@ -200,8 +200,15 @@ export function detectBatch(
 
 export async function persistDetection(result: DetectionResult): Promise<void> {
   try {
+    // Honor any explicit timestamp on the result/packet (set by the seed
+    // script when spreading detections across the past 7 days) instead of
+    // letting Prisma default both rows to `now()`.
+    const packetTimestamp = result.packet.timestamp ?? result.timestamp ?? new Date();
+    const detectionTimestamp = result.timestamp ?? packetTimestamp;
+
     const packet = await prisma.networkPacket.create({
       data: {
+        timestamp: packetTimestamp,
         sourceIP: result.packet.sourceIP,
         destIP: result.packet.destIP,
         sourcePort: result.packet.sourcePort,
@@ -215,6 +222,7 @@ export async function persistDetection(result: DetectionResult): Promise<void> {
     await prisma.detectionResult.create({
       data: {
         packetId: packet.id,
+        timestamp: detectionTimestamp,
         isAnomaly: result.isAnomaly,
         threatLevel: result.threatLevel.toUpperCase(),
         attackType: result.attackType,
@@ -230,6 +238,7 @@ export async function persistDetection(result: DetectionResult): Promise<void> {
     if (result.isAnomaly && result.autoResponseAction !== 'ignored') {
       await prisma.alert.create({
         data: {
+          timestamp: detectionTimestamp,
           severity: result.threatLevel.toUpperCase(),
           title: `${result.attackType ?? 'Anomaly'} detected`,
           message: result.description,
@@ -242,28 +251,41 @@ export async function persistDetection(result: DetectionResult): Promise<void> {
     }
 
     if (result.autoResponseAction === 'blocked') {
-      await prisma.blockedIP
-        .upsert({
+      // Use the in-memory auto-response service as the single source of truth
+      // for block TTL — it knows the current configured `autoBlockDuration`
+      // and tracks the block's actual `expiresAt`. Avoids the stale 24h
+      // hardcode that diverged from the in-memory state.
+      const block = autoResponseService.getBlockedIPs().find(
+        b => b.ipAddress === result.packet.sourceIP
+      );
+      try {
+        await prisma.blockedIP.upsert({
           where: { ipAddress: result.packet.sourceIP },
           update: {
             reason: `Auto-blocked: ${result.attackType ?? 'Anomaly'}`,
             attackType: result.attackType ?? null,
             confidence: result.confidence,
             autoBlocked: true,
+            expiresAt: block?.expiresAt ?? null,
           },
           create: {
             ipAddress: result.packet.sourceIP,
+            blockedAt: detectionTimestamp,
             reason: `Auto-blocked: ${result.attackType ?? 'Anomaly'}`,
             attackType: result.attackType ?? null,
             confidence: result.confidence,
             autoBlocked: true,
-            expiresAt:
-              result.threatLevel === 'critical'
-                ? null
-                : new Date(Date.now() + 24 * 60 * 60 * 1000),
+            expiresAt: block?.expiresAt ?? null,
           },
-        })
-        .catch(() => {});
+        });
+      } catch (err) {
+        // P2002 = unique constraint violation. Safe to ignore (race with
+        // another concurrent auto-block on the same IP). Re-raise anything else.
+        const code = (err as { code?: string }).code;
+        if (code !== 'P2002') {
+          console.error('blockedIP upsert failed:', err);
+        }
+      }
     }
   } catch (err) {
     console.error('persistDetection error:', err);

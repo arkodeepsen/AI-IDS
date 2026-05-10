@@ -1,6 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 
+const VALID_STATUSES = new Set(['NEW', 'INVESTIGATING', 'RESOLVED', 'FALSE_POSITIVE']);
+const TERMINAL_STATUSES = new Set(['RESOLVED', 'FALSE_POSITIVE']);
+
+function normaliseStatus(input: unknown): string | null {
+  if (typeof input !== 'string' || !input.trim()) return null;
+  const upper = input.toUpperCase().replace(/-/g, '_');
+  return VALID_STATUSES.has(upper) ? upper : null;
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -10,7 +19,10 @@ export async function GET(request: NextRequest) {
     const offset = parseInt(searchParams.get('offset') ?? '0');
 
     const where: Record<string, string> = {};
-    if (status) where.status = status.toUpperCase();
+    if (status) {
+      const norm = normaliseStatus(status);
+      if (norm) where.status = norm;
+    }
     if (severity) where.severity = severity.toUpperCase();
 
     const [alerts, total] = await Promise.all([
@@ -46,9 +58,16 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { severity, title, message, sourceIP, destIP, attackType } = body;
 
+    if (typeof severity !== 'string' || !title || !message || !sourceIP || !destIP) {
+      return NextResponse.json(
+        { success: false, error: 'severity, title, message, sourceIP and destIP are required' },
+        { status: 400 }
+      );
+    }
+
     const alert = await prisma.alert.create({
       data: {
-        severity: (severity as string).toUpperCase(),
+        severity: severity.toUpperCase(),
         title,
         message,
         sourceIP,
@@ -73,10 +92,28 @@ export async function PATCH(request: NextRequest) {
     const body = await request.json();
     const { id, status, notes, handledBy } = body;
 
-    const data: Record<string, unknown> = { status: status.toUpperCase() };
-    if (notes) data.notes = notes;
-    if (handledBy) data.handledBy = handledBy;
-    if (status === 'RESOLVED' || status === 'FALSE_POSITIVE' || status === 'resolved' || status === 'false-positive') {
+    if (typeof id !== 'string' || !id) {
+      return NextResponse.json(
+        { success: false, error: 'id is required' },
+        { status: 400 }
+      );
+    }
+
+    const normStatus = normaliseStatus(status);
+    if (!normStatus) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `status must be one of ${Array.from(VALID_STATUSES).join(', ')}`,
+        },
+        { status: 400 }
+      );
+    }
+
+    const data: Record<string, unknown> = { status: normStatus };
+    if (typeof notes === 'string') data.notes = notes;
+    if (typeof handledBy === 'string') data.handledBy = handledBy;
+    if (TERMINAL_STATUSES.has(normStatus)) {
       data.handledAt = new Date();
     }
 
