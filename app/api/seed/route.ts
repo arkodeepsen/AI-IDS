@@ -2,6 +2,16 @@
  * /api/seed — pre-populates the SQLite database with a week of synthetic
  * traffic so the dashboard never looks empty during evaluation. Idempotent:
  * if data already exists it short-circuits unless `?force=1` is passed.
+ *
+ * Authorisation: `?force=1` deletes the four primary tables (packets,
+ * detections, alerts, blocked IPs) before re-seeding. To prevent accidental
+ * or malicious wipes when the dashboard is hosted somewhere reachable,
+ * destructive seeds are gated by environment:
+ *
+ *   - NODE_ENV !== 'production'   → always allowed (local dev)
+ *   - NODE_ENV === 'production'   → SEED_TOKEN env var must be set, and
+ *                                   the request must include
+ *                                   `x-seed-token: <value>` matching it
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -13,9 +23,40 @@ import { autoResponseService } from '@/lib/services/auto-response';
 const SEED_PACKETS = 1500;
 const ATTACK_BURSTS = 5;
 
+/**
+ * Returns null if the request is allowed to perform a destructive seed,
+ * or a NextResponse with the rejection reason if not.
+ */
+function checkDestructiveAuth(request: NextRequest): NextResponse | null {
+  if (process.env.NODE_ENV !== 'production') return null;
+  const expected = process.env.SEED_TOKEN;
+  if (!expected) {
+    return NextResponse.json(
+      {
+        success: false,
+        error:
+          'Destructive seed disabled in production. Set SEED_TOKEN env var to enable.',
+      },
+      { status: 403 }
+    );
+  }
+  const supplied = request.headers.get('x-seed-token');
+  if (supplied !== expected) {
+    return NextResponse.json(
+      { success: false, error: 'Invalid or missing x-seed-token header.' },
+      { status: 403 }
+    );
+  }
+  return null;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const force = request.nextUrl.searchParams.get('force') === '1';
+    if (force) {
+      const rejection = checkDestructiveAuth(request);
+      if (rejection) return rejection;
+    }
     const existing = await prisma.networkPacket.count();
     if (existing >= 200 && !force) {
       return NextResponse.json({

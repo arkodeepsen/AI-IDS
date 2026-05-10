@@ -4,6 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { isIP } from 'node:net';
 import prisma from '@/lib/prisma';
 import { autoResponseService } from '@/lib/services/auto-response';
 
@@ -16,6 +17,36 @@ interface BlockedIPRecord {
   blockedAt: Date | string;
   expiresAt: Date | string | null;
   autoBlocked: boolean;
+}
+
+/**
+ * Validate an IP-address request body. Returns the normalised address
+ * (trimmed) on success, or a NextResponse with the rejection on failure.
+ * Uses node:net's isIP() so we accept both IPv4 and IPv6 and reject
+ * everything else — preventing garbage records and log/UI injection from
+ * arbitrary string values.
+ */
+function validateIPAddress(raw: unknown): { ok: true; ip: string } | { ok: false; res: NextResponse } {
+  if (typeof raw !== 'string' || !raw.trim()) {
+    return {
+      ok: false,
+      res: NextResponse.json(
+        { success: false, error: 'ipAddress required' },
+        { status: 400 }
+      ),
+    };
+  }
+  const trimmed = raw.trim();
+  if (isIP(trimmed) === 0) {
+    return {
+      ok: false,
+      res: NextResponse.json(
+        { success: false, error: `Invalid IP address: ${trimmed}` },
+        { status: 400 }
+      ),
+    };
+  }
+  return { ok: true, ip: trimmed };
 }
 
 export async function GET() {
@@ -71,13 +102,10 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { ipAddress, reason, duration, attackType, confidence } = body;
-    if (typeof ipAddress !== 'string' || !ipAddress.trim()) {
-      return NextResponse.json(
-        { success: false, error: 'ipAddress required' },
-        { status: 400 }
-      );
-    }
+    const { reason, duration, attackType, confidence } = body;
+    const validation = validateIPAddress(body.ipAddress);
+    if (!validation.ok) return validation.res;
+    const ipAddress = validation.ip;
 
     const blocked = autoResponseService.blockIP(ipAddress, {
       reason: reason ?? 'Manual block',
@@ -128,13 +156,9 @@ export async function POST(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   try {
     const body = await request.json();
-    const { ipAddress } = body;
-    if (typeof ipAddress !== 'string' || !ipAddress.trim()) {
-      return NextResponse.json(
-        { success: false, error: 'ipAddress required' },
-        { status: 400 }
-      );
-    }
+    const validation = validateIPAddress(body.ipAddress);
+    if (!validation.ok) return validation.res;
+    const ipAddress = validation.ip;
 
     autoResponseService.unblockIP(ipAddress, 'Manual unblock');
     try {
