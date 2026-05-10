@@ -9,7 +9,7 @@
 
 import { NextResponse } from 'next/server';
 import { getModelMetrics } from '@/lib/ml/metrics';
-import { loadTrainedArtefacts } from '@/lib/ml/loader';
+import { loadTrainedArtefacts, loadCICIDSMetrics } from '@/lib/ml/loader';
 import { loadLSTM } from '@/lib/ml/lstm-loader';
 import { datasets } from '@/lib/utils';
 
@@ -17,6 +17,7 @@ export async function GET() {
   try {
     const artefacts = loadTrainedArtefacts();
     const lstm = loadLSTM();
+    const cicidsMetrics = loadCICIDSMetrics();
 
     // Map either source into the dashboard's expected shape.
     const ensembleMetrics = artefacts
@@ -85,6 +86,28 @@ export async function GET() {
           m.detectionTime < b.detectionTime ? m : b
         ),
       },
+      // Cross-dataset comparison: same four-model architecture trained
+      // independently on CICIDS-2017 — present only when the user has run
+      // `npm run train:cicids`. The runtime detector keeps using the NSL-KDD
+      // ensemble; this block is for the Datasets tab.
+      crossDataset: cicidsMetrics
+        ? {
+            dataset: cicidsMetrics.dataset,
+            trainedAt: cicidsMetrics.trainedAt,
+            trainingSamples: cicidsMetrics.trainingSamples,
+            testingSamples: cicidsMetrics.testingSamples,
+            perModel: cicidsMetrics.perModel.map(m => ({
+              method: m.method,
+              accuracy: m.accuracy,
+              precision: m.precision,
+              recall: m.recall,
+              f1Score: m.f1Score,
+              falsePositiveRate: m.falsePositiveRate,
+            })),
+            perFamilyRecall: cicidsMetrics.perFamilyRecall ?? null,
+            classDistribution: cicidsMetrics.classDistribution,
+          }
+        : null,
       research: {
         title: 'Comparative Analysis of ML Techniques for Network Intrusion Detection',
         abstract: artefacts

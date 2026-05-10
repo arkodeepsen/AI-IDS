@@ -9,6 +9,7 @@ import ModelComparison from '@/components/ModelComparison';
 import AIAssistant from '@/components/AIAssistant';
 import AlertsPanel from '@/components/AlertsPanel';
 import DatasetInfo from '@/components/DatasetInfo';
+import CrossDatasetMetrics from '@/components/CrossDatasetMetrics';
 import LiveControl from '@/components/LiveControl';
 import EnsembleDonut from '@/components/EnsembleDonut';
 import BlockedIPsPanel from '@/components/BlockedIPsPanel';
@@ -137,6 +138,7 @@ export default function Home() {
         {activeTab === 'datasets' && (
           <div className="space-y-4 fade-in">
             <DatasetInfo />
+            <CrossDatasetMetrics />
             <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
               <h2 className="text-base font-semibold text-white mb-3 tracking-wide uppercase">
                 Feature Engineering

@@ -96,3 +96,24 @@ export function loadTrainedArtefacts(): LoadedArtefacts | null {
 export function getCachedMetrics(): TrainedMetrics | null {
   return cached?.metrics ?? null;
 }
+
+/**
+ * Optional CICIDS-2017 metrics — only present when the user has run
+ * `npm run train:cicids`. We expose these for cross-dataset reporting on the
+ * Datasets tab without swapping the runtime ensemble: NSL-KDD-trained models
+ * stay deployed, CICIDS metrics are evidence the methodology generalises.
+ */
+export interface CICIDSTrainedMetrics extends TrainedMetrics {
+  perFamilyRecall?: Record<string, number>;
+}
+
+export function loadCICIDSMetrics(): CICIDSTrainedMetrics | null {
+  try {
+    const metricsPath = path.join(MODELS_DIR, 'cicids', 'metrics.json');
+    if (!fs.existsSync(metricsPath)) return null;
+    return JSON.parse(fs.readFileSync(metricsPath, 'utf8')) as CICIDSTrainedMetrics;
+  } catch (err) {
+    console.warn('[ml/loader] Failed to read CICIDS metrics:', err);
+    return null;
+  }
+}

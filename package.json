@@ -16,6 +16,8 @@
     "data:download": "bash scripts/download-nslkdd.sh",
     "train": "tsx scripts/train-nslkdd.ts",
     "train:lstm": "tsx scripts/train-lstm.ts",
+    "train:cicids": "tsx scripts/train-cicids.ts",
+    "prepare:cicids": "tsx scripts/prepare-cicids.ts",
     "postinstall": "prisma generate"
   },
   "dependencies": {
