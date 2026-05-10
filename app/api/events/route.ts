@@ -8,51 +8,36 @@
  *
  * The stream emits:
  *   - `init`        on connect, with the latest 5 detections
- *   - `detection`   every poll cycle when new anomalies are persisted
+ *   - `detection`   when new anomalies land (via the shared broadcaster)
  *   - `heartbeat`   every 15 s so proxies don't close idle connections
+ *
+ * Polling is centralised in `lib/services/sse-broadcaster.ts` so multiple
+ * connected clients share a single DB poll instead of each running their
+ * own timer.
  */
 
 import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
+import { sseBroadcaster, type BroadcastDetection } from '@/lib/services/sse-broadcaster';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const POLL_INTERVAL_MS = 3000;
 const HEARTBEAT_INTERVAL_MS = 15000;
-
-interface PacketRef {
-  sourceIP: string;
-  destIP: string;
-  destPort: number;
-  protocol: string;
-}
-
-interface DetectionEvent {
-  id: string;
-  timestamp: Date;
-  isAnomaly: boolean;
-  threatLevel: string;
-  attackType: string | null;
-  confidence: number;
-  detectionMethod: string;
-  autoResponse: string | null;
-  packet: PacketRef;
-}
 
 function format(event: string, data: unknown): string {
   return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
 }
 
 export async function GET(req: NextRequest) {
-  // Optional ?since=<ISO> lets a reconnecting client resume without missing
-  // events that landed during the gap.
+  // Optional ?since=<ISO> lets a reconnecting client request backfill
+  // without missing events that landed during the gap.
   const since = req.nextUrl.searchParams.get('since');
-  let lastSeen = since ? new Date(since) : new Date(Date.now() - 5 * 60 * 1000);
+  const sinceDate = since ? new Date(since) : null;
 
   const encoder = new TextEncoder();
-  let pollHandle: ReturnType<typeof setInterval> | undefined;
   let heartbeatHandle: ReturnType<typeof setInterval> | undefined;
+  let subscriberId: number | null = null;
   let closed = false;
 
   const stream = new ReadableStream({
@@ -66,7 +51,7 @@ export async function GET(req: NextRequest) {
         }
       };
 
-      // Initial payload: the most recent anomalies so the client UI can hydrate.
+      // Initial payload: the most recent anomalies so the client UI hydrates.
       try {
         const recent = await prisma.detectionResult.findMany({
           where: { isAnomaly: true },
@@ -82,36 +67,41 @@ export async function GET(req: NextRequest) {
         console.error('SSE init failed:', err);
       }
 
-      const poll = async () => {
-        if (closed) return;
+      // Backfill for reconnecting clients: anything since their last-seen
+      // cursor. Subscribe BEFORE running this so we don't miss events that
+      // land between the backfill query and the subscription handler taking
+      // over — subscribers can dedupe by id on the client.
+      const seenInBackfill = new Set<string>();
+      subscriberId = sseBroadcaster.subscribe(event => {
+        if (seenInBackfill.has(event.id)) return;
+        send('detection', event);
+      });
+
+      if (sinceDate && !Number.isNaN(sinceDate.getTime())) {
         try {
-          const fresh = await prisma.detectionResult.findMany({
-            where: { isAnomaly: true, timestamp: { gt: lastSeen } },
+          const backfill = await prisma.detectionResult.findMany({
+            where: { isAnomaly: true, timestamp: { gt: sinceDate } },
             include: { packet: true },
-            orderBy: { timestamp: 'asc' },
-            take: 20,
+            orderBy: [{ timestamp: 'asc' }, { id: 'asc' }],
+            take: 100,
           });
-          for (const d of fresh) {
+          for (const d of backfill) {
+            seenInBackfill.add(d.id);
             send('detection', serialise(d));
-            lastSeen = d.timestamp;
           }
         } catch (err) {
-          console.error('SSE poll failed:', err);
+          console.error('SSE backfill failed:', err);
         }
-      };
+      }
 
-      pollHandle = setInterval(poll, POLL_INTERVAL_MS);
       heartbeatHandle = setInterval(() => {
         send('heartbeat', { ts: new Date().toISOString() });
       }, HEARTBEAT_INTERVAL_MS);
 
-      // First poll runs immediately so the client gets fresh data fast.
-      void poll();
-
       req.signal.addEventListener('abort', () => {
         closed = true;
-        if (pollHandle) clearInterval(pollHandle);
         if (heartbeatHandle) clearInterval(heartbeatHandle);
+        if (subscriberId !== null) sseBroadcaster.unsubscribe(subscriberId);
         try {
           controller.close();
         } catch {
@@ -121,8 +111,8 @@ export async function GET(req: NextRequest) {
     },
     cancel() {
       closed = true;
-      if (pollHandle) clearInterval(pollHandle);
       if (heartbeatHandle) clearInterval(heartbeatHandle);
+      if (subscriberId !== null) sseBroadcaster.unsubscribe(subscriberId);
     },
   });
 
@@ -145,8 +135,13 @@ function serialise(d: {
   confidence: number;
   detectionMethod: string;
   autoResponse: string | null;
-  packet: PacketRef;
-}): DetectionEvent {
+  packet: {
+    sourceIP: string;
+    destIP: string;
+    destPort: number;
+    protocol: string;
+  };
+}): BroadcastDetection {
   return {
     id: d.id,
     timestamp: d.timestamp,
