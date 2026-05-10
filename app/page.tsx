@@ -12,6 +12,7 @@ import DatasetInfo from '@/components/DatasetInfo';
 import LiveControl from '@/components/LiveControl';
 import EnsembleDonut from '@/components/EnsembleDonut';
 import BlockedIPsPanel from '@/components/BlockedIPsPanel';
+import LSTMPanel from '@/components/LSTMPanel';
 import {
   RLHFFeedbackPanel,
   AutoResponseControl,
@@ -80,6 +81,7 @@ export default function Home() {
         {activeTab === 'models' && (
           <div className="space-y-4 fade-in">
             <ModelComparison />
+            <LSTMPanel />
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <RLHFFeedbackPanel />
               <EnsembleDonut />

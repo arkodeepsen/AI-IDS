@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import LiveToasts from "@/components/LiveToasts";
 
 // Using system stack instead of next/font/google so the project builds offline.
 // Swap back to Geist whenever an internet connection is available during build.
@@ -17,7 +18,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className="antialiased">{children}</body>
+      <body className="antialiased">
+        {children}
+        <LiveToasts />
+      </body>
     </html>
   );
 }

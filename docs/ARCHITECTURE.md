@@ -133,11 +133,14 @@ weights through `getDetector().updateWeights(...)`.
 
 | Slide claim | Reality | Resolution |
 |---|---|---|
-| "Manifest V3 Chrome extension WebSocket client" | MV3 service workers kill idle WebSockets. | Extension is shipped but not on the demo path. The dashboard polls every 4 s. |
+| "Manifest V3 Chrome extension WebSocket client" | MV3 service workers kill idle WebSockets. | Extension rewritten to use `chrome.alarms` + the dashboard's HTTP endpoints. Toolbar badge + desktop notifications work; SSE on the dashboard provides the same "push" UX in-browser. |
+| "WebSocket-powered alert notifications" | Native Next.js WebSockets in 16 are still rough. | Replaced with Server-Sent Events at `/api/events`. Real push, plain HTTP, no special server. The dashboard's `<LiveToasts/>` consumes the stream. |
 | "Python/libpcap backend" | Needs admin + Npcap on Windows. | Synthetic generator replays packets through the same ensemble. Architecture is identical from the detector down. |
 | "Autoencoder Neural Network" | Implies Keras/TF. | Pure-TS encoder-decoder with sigmoid output. Trained on the same 72-dim NSL-KDD vectors. |
+| "LSTM and Transformer models for sequential analysis" | Listed as future scope. | LSTM is **implemented** (`lib/ml/lstm.ts`) and trained on sliding 8-flow NSL-KDD windows (`models/lstm.json`). Transformer remains future scope. |
+| "IP Address Entropy Scores" | Not part of NSL-KDD's column set. | Computed at runtime in `lib/ml/ip-entropy.ts` (octet-byte Shannon entropy + rolling per-source fan-out entropy) and persisted on every detection row. |
 | "Iptables/Windows Firewall integration" | Touching the host firewall during a demo is unsafe. | Replaced with a `BlockedIP` SQLite table that mirrors the same effect. |
-| "Tested on CICIDS benchmark datasets" | We trained and evaluated on **NSL-KDD**, not CICIDS. | The Datasets tab still references CICIDS for context but the live metrics are NSL-KDD. |
+| "Tested on CICIDS benchmark datasets" | We trained and evaluated on **NSL-KDD**, not CICIDS. | The Datasets tab still references CICIDS for context but the live metrics are NSL-KDD. CICIDS evaluation remains future scope. |
 
 ## Trade-offs
 
@@ -148,9 +151,37 @@ weights through `getDetector().updateWeights(...)`.
   hit either way.
 - **Autoencoder is a pure-TS MLP, not Keras.** No GPU required, single
   threaded — adequate at NSL-KDD scale, would need rework for production.
+- **LSTM uses a hybrid training signal.** The output head learns by
+  analytic gradient on cross-entropy; the recurrent weights drift via
+  small stochastic perturbations toward the gradient direction. A proper
+  BPTT implementation would converge faster but adds a lot of code; the
+  hybrid trick reaches 78.73% test accuracy in seconds.
 - **In-memory feedback.** RLHF service holds feedback in RAM; restarting
   the server resets the Active Learning state.
 - **NSL-KDD test set has novel attacks not in train.** This is a known
   property of the benchmark — it's why even strong models hit ~90% rather
   than the 99% you see on intra-domain splits. Our ~91% ensemble is in the
   upper-middle of the published range.
+
+## Real-time delivery
+
+The dashboard receives new detections via Server-Sent Events at
+`/api/events`. The stream emits three event types:
+
+- `init` — sent once on connect, carries the latest 5 high-severity
+  detections so the UI can hydrate without an extra round-trip.
+- `detection` — emitted every poll cycle (3 s) for any anomaly that's been
+  persisted since the last tick. The UI surfaces high/critical detections
+  as toast notifications via `<LiveToasts/>`.
+- `heartbeat` — every 15 s so reverse proxies don't close the connection.
+
+SSE was chosen over WebSocket because Next.js 16 Route Handlers don't ship
+a built-in WebSocket server. SSE is one-directional (server → client)
+which matches the use case exactly: the client doesn't need to send data
+mid-stream, only receive events.
+
+The Chrome extension lives outside this real-time path. MV3 service
+workers can be suspended and don't keep long-lived connections alive, so
+the extension uses `chrome.alarms` to poll `/api/stats` and
+`/api/detections` every 30 s. It maintains a small in-memory cache of
+notified detection IDs to avoid double-buzzing the user.

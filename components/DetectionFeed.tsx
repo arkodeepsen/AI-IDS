@@ -29,6 +29,11 @@ interface DBDetection {
     randomForest?: number;
     xgboost?: number;
   };
+  ipEntropy?: {
+    source: number;
+    destination: number;
+    sourceFanout: number;
+  };
   autoResponse: string | null;
   packet: {
     sourceIP: string;
@@ -280,6 +285,32 @@ export default function DetectionFeed({
                             </p>
                           </div>
                         ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {result.ipEntropy && (
+                    <div className="mt-3">
+                      <p className="text-xs text-zinc-500 mb-1.5">IP entropy signals</p>
+                      <div className="grid grid-cols-3 gap-2 text-xs">
+                        <div className="bg-zinc-800/60 rounded px-2 py-1">
+                          <p className="text-zinc-500 text-[10px] uppercase">Src octet</p>
+                          <p className="text-white tabular-nums">
+                            {(result.ipEntropy.source * 100).toFixed(0)}%
+                          </p>
+                        </div>
+                        <div className="bg-zinc-800/60 rounded px-2 py-1">
+                          <p className="text-zinc-500 text-[10px] uppercase">Dst octet</p>
+                          <p className="text-white tabular-nums">
+                            {(result.ipEntropy.destination * 100).toFixed(0)}%
+                          </p>
+                        </div>
+                        <div className="bg-zinc-800/60 rounded px-2 py-1">
+                          <p className="text-zinc-500 text-[10px] uppercase">Src fan-out</p>
+                          <p className="text-white tabular-nums">
+                            {(result.ipEntropy.sourceFanout * 100).toFixed(0)}%
+                          </p>
+                        </div>
                       </div>
                     </div>
                   )}

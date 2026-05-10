@@ -29,6 +29,7 @@ export async function GET(request: NextRequest) {
       threatLevel: r.threatLevel.toLowerCase(),
       recommendations: safeParse<string[]>(r.recommendations, []),
       modelScores: safeParse<Record<string, number>>(r.modelScores, {}),
+      ipEntropy: safeParse<Record<string, number>>(r.ipEntropy ?? '{}', {}),
     }));
 
     return NextResponse.json({ success: true, results: hydrated });

@@ -55,6 +55,11 @@ export interface DetectionResult {
     randomForest: number;
     xgboost: number;
   };
+  ipEntropy?: {
+    source: number;
+    destination: number;
+    sourceFanout: number;
+  };
   autoResponseAction?: 'blocked' | 'alerted' | 'monitored' | 'ignored';
 }
 

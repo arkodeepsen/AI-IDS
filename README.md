@@ -17,11 +17,13 @@ continuous self-improvement through Active Learning.
 | Random Forest    |  86.21%  |   93.01%  | 82.11%  | 87.22% |  8.28% |
 | XGBoost          |  86.91%  |   88.77%  | 88.33%  | 88.55% | 14.99% |
 | **Ensemble**     | **90.99%** | **87.72%** | **97.99%** | **92.57%** | 18.41% |
+| LSTM (sequence)  |  78.73%  |   86.13%  | 73.93%  | 79.56% | 15.15% |
 
 Trained on 25,000 stratified KDDTrain+ samples (with R2L/U2R oversampling
 to address the well-known class imbalance), evaluated on 8,000 KDDTest+
-samples. Metrics are written to `models/metrics.json` and surfaced on the
-ML Models tab.
+samples. The LSTM is a separate model trained on sliding 8-flow windows
+over the same dataset.  Metrics are written to `models/metrics.json` /
+`models/lstm-metrics.json` and surfaced on the ML Models tab.
 
 ---
 
@@ -30,14 +32,24 @@ ML Models tab.
 - Captures (or simulates) network packets, projects them into the **41-feature
   NSL-KDD shape** and runs each through a weighted **4-model ensemble**:
   Isolation Forest, Autoencoder, Random Forest, XGBoost-style Gradient Boosting.
+- A separate **LSTM sequence model** scores sliding 8-flow windows so the
+  operator can compare flow-level vs. sequence-level evidence.
 - Classifies traffic as `low` / `medium` / `high` / `critical` and triggers
   severity-driven **autonomous response** (alert, time-limited block, or
   permanent ban).
 - Lets the operator validate, dismiss or correct each detection from the UI.
   An **Active Learning (HITL)** loop re-balances the ensemble weights every
   10 verified samples.
+- Pushes detection events to the dashboard in real time via **Server-Sent
+  Events** (`/api/events`) — high/critical detections surface as toast
+  notifications system-wide.
+- Ships a **Chrome (Manifest V3) extension** that polls the running
+  dashboard via `chrome.alarms` and displays toolbar-badge + desktop
+  notifications.
 - Persists every packet, detection and block to a local **SQLite** database
   (zero-config, single file at `prisma/dev.db`).
+- Computes **per-packet IP entropy** (octet entropy + rolling source
+  fan-out) and exposes it on every detection row.
 - Provides a Next.js 16 dashboard with real-time charts (Recharts), a live
   detection feed, and an integrated **Gemini AI** assistant (with offline
   fallback).
@@ -69,18 +81,29 @@ npx prisma migrate deploy
 # 3. download NSL-KDD (one-time, ~22 MB)
 npm run data:download
 
-# 4. train the four models on NSL-KDD (~5 min, writes models/*.json)
+# 4. train the four ensemble models on NSL-KDD (~5 min)
 npm run train
 
-# 5. start the dashboard
+# 5. (optional) train the LSTM sequence model on NSL-KDD windows (~5 s)
+npm run train:lstm
+
+# 6. start the dashboard
 npm run dev          # http://localhost:3000
 
-# 6. (optional) populate ~7 days of demo data
+# 7. (optional) populate ~7 days of demo data
 curl -X POST http://localhost:3000/api/seed
 ```
 
-The repository ships with `models/ensemble.json` already trained, so steps 3
-and 4 are optional — skip them and the runtime loads the bundled weights.
+The repository ships with `models/ensemble.json` + `models/lstm.json`
+already trained, so steps 3-5 are optional — skip them and the runtime
+loads the bundled weights.
+
+### Optional: load the Chrome extension
+
+1. `chrome://extensions` → enable Developer Mode → "Load unpacked".
+2. Pick the `chrome-extension/` folder.
+3. The toolbar icon shows a badge with the live anomaly count from the
+   running dashboard; high/critical detections fire desktop notifications.
 
 From the dashboard:
 
@@ -217,6 +240,9 @@ shape:
 | GET    | `/api/alerts` | DB-backed alerts |
 | POST   | `/api/auto-response` | Block / whitelist / update config |
 | POST   | `/api/analyze` | Gemini analyze / explain / advice |
+| GET    | `/api/lstm` | LSTM sequence-model metrics |
+| POST   | `/api/lstm` | Score the most recent N detections as a sequence |
+| GET    | `/api/events` | Server-Sent Events stream of new detections |
 
 ---
 
@@ -229,9 +255,10 @@ See [`docs/DEMO_SCRIPT.md`](docs/DEMO_SCRIPT.md) for the 8-minute talk track.
 ## Future work
 
 - Online learning: drip new feedback into RF / XGBoost without full retrain.
-- LSTM / Transformer encoder over flow sequences.
-- CICIDS-2017 secondary evaluation to compare cross-dataset generalisation.
+- Transformer encoder over flow sequences (LSTM is in place).
+- CICIDS-2017 secondary evaluation for cross-dataset generalisation.
 - Multi-tenant deployment with per-tenant ensemble weights stored in S3.
+- True distributed detection across hardware nodes.
 
 ---
 

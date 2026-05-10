@@ -40,6 +40,15 @@ export {
   type TrainedMetrics,
 } from './loader';
 export { packetToKddRow, type KddOverride } from './packet-to-kdd';
+export { LSTMClassifier, type SerialisedLSTM } from './lstm';
+export { loadLSTM, getLSTMMetrics, type LSTMMetrics } from './lstm-loader';
+export {
+  computeIpEntropy,
+  octetEntropy,
+  recordAndScoreSource,
+  resetEntropyCache,
+  type IpEntropyScores,
+} from './ip-entropy';
 export {
   parseKDDRow,
   vectorise,

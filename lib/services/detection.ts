@@ -16,6 +16,7 @@ import {
   generateLabeledTrainingData,
   loadTrainedArtefacts,
 } from '../ml';
+import { computeIpEntropy } from '../ml/ip-entropy';
 import { autoResponseService } from './auto-response';
 import { autoTrainingService } from './auto-training';
 import { rlhfService } from './rlhf';
@@ -159,6 +160,7 @@ export function detectAnomaly(
   const threatLevel = getThreatLevel(score);
   const attackType = isAnomaly ? classifyAttack(packet, prediction.attackType) : undefined;
 
+  const ipEntropy = computeIpEntropy(packet.sourceIP, packet.destIP);
   const result: DetectionResult = {
     id: crypto.randomUUID(),
     timestamp: new Date(),
@@ -173,6 +175,7 @@ export function detectAnomaly(
       : 'Normal traffic pattern. No anomaly detected.',
     recommendations: isAnomaly ? RECOMMENDATIONS[attackType ?? 'Unknown'] : [],
     modelScores: prediction.scores,
+    ipEntropy,
   };
 
   if (isAnomaly) {
@@ -231,6 +234,7 @@ export async function persistDetection(result: DetectionResult): Promise<void> {
         description: result.description,
         recommendations: JSON.stringify(result.recommendations),
         modelScores: JSON.stringify(result.modelScores ?? {}),
+        ipEntropy: JSON.stringify(result.ipEntropy ?? {}),
         autoResponse: result.autoResponseAction ?? null,
       },
     });

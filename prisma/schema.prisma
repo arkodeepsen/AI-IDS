@@ -41,6 +41,8 @@ model DetectionResult {
   description     String
   recommendations String   @default("[]")
   modelScores     String   @default("{}")
+  // JSON-encoded {source, destination, sourceFanout} entropy scores.
+  ipEntropy       String   @default("{}")
   autoResponse    String?
 
   packetId String        @unique
