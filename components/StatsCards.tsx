@@ -1,13 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import {
   Shield,
   AlertTriangle,
   Activity,
   Cpu,
   Database,
-  Clock
+  Ban,
 } from 'lucide-react';
 
 interface StatsCardProps {
@@ -15,102 +15,149 @@ interface StatsCardProps {
   value: string | number;
   subtitle?: string;
   icon: React.ReactNode;
+  accent?: 'cyan' | 'red' | 'amber' | 'emerald' | 'blue';
 }
 
-function StatsCard({ title, value, subtitle, icon }: StatsCardProps) {
+const ACCENT: Record<string, string> = {
+  cyan: 'text-cyan-400 bg-cyan-500/10',
+  red: 'text-red-400 bg-red-500/10',
+  amber: 'text-amber-400 bg-amber-500/10',
+  emerald: 'text-emerald-400 bg-emerald-500/10',
+  blue: 'text-blue-400 bg-blue-500/10',
+};
+
+function StatsCard({ title, value, subtitle, icon, accent = 'cyan' }: StatsCardProps) {
   return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
+    <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4 transition-colors hover:border-zinc-700">
       <div className="flex items-center justify-between mb-3">
-        <span className="text-zinc-500">{icon}</span>
+        <span className={`p-1.5 rounded ${ACCENT[accent]}`}>{icon}</span>
       </div>
-      <p className="text-2xl font-semibold text-white">{value}</p>
+      <p className="text-2xl font-semibold text-white tabular-nums">{value}</p>
       <p className="text-sm text-zinc-400 mt-1">{title}</p>
       {subtitle && <p className="text-xs text-zinc-500 mt-0.5">{subtitle}</p>}
     </div>
   );
 }
 
-interface SystemStats {
+interface BackendStats {
   totalPackets: number;
-  anomalies: number;
-  threatLevel: string;
-  uptime: number;
-  packetsPerSec: number;
-  detectionLatency: number;
+  totalAnomalies: number;
+  detectionRate: string;
+  blockedIPs: number;
+  newAlerts: number;
+  threatLevelDistribution: {
+    critical: number;
+    high: number;
+    medium: number;
+    low: number;
+  };
 }
 
+const ZERO_STATS: BackendStats = {
+  totalPackets: 0,
+  totalAnomalies: 0,
+  detectionRate: '0.00%',
+  blockedIPs: 0,
+  newAlerts: 0,
+  threatLevelDistribution: { critical: 0, high: 0, medium: 0, low: 0 },
+};
+
 export default function StatsCards() {
-  const [stats, setStats] = useState<SystemStats>({
-    totalPackets: 0,
-    anomalies: 0,
-    threatLevel: 'Low',
-    uptime: 0,
-    packetsPerSec: 0,
-    detectionLatency: 0,
-  });
+  const [stats, setStats] = useState<BackendStats>(ZERO_STATS);
+  const [pps, setPps] = useState(0);
+  const [latency, setLatency] = useState(0);
   const [mounted, setMounted] = useState(false);
+
+  const fetchStats = useCallback(async () => {
+    try {
+      const start = performance.now();
+      const res = await fetch('/api/stats?period=24h', { cache: 'no-store' });
+      const data = await res.json();
+      if (data.success) {
+        setStats(data.stats);
+        setLatency(performance.now() - start);
+      }
+    } catch (err) {
+      console.error('Stats fetch failed:', err);
+    }
+  }, []);
 
   useEffect(() => {
     setMounted(true);
-    const interval = setInterval(() => {
-      setStats(prev => ({
-        totalPackets: prev.totalPackets + Math.floor(Math.random() * 50) + 10,
-        anomalies: prev.anomalies + (Math.random() < 0.1 ? 1 : 0),
-        threatLevel: Math.random() < 0.95 ? 'Low' : Math.random() < 0.8 ? 'Medium' : 'High',
-        uptime: prev.uptime + 1,
-        packetsPerSec: Math.floor(Math.random() * 500) + 200,
-        detectionLatency: Math.random() * 5 + 2,
-      }));
-    }, 1000);
-
+    fetchStats();
+    const interval = setInterval(fetchStats, 4000);
     return () => clearInterval(interval);
-  }, []);
+  }, [fetchStats]);
 
-  const formatUptime = (seconds: number): string => {
-    if (!mounted) return '00:00:00';
-    const hrs = Math.floor(seconds / 3600);
-    const mins = Math.floor((seconds % 3600) / 60);
-    const secs = seconds % 60;
-    return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
+  // Estimate packets/sec from running average so the card never shows zero.
+  useEffect(() => {
+    if (!mounted) return;
+    let last = stats.totalPackets;
+    const t = setInterval(() => {
+      const delta = stats.totalPackets - last;
+      last = stats.totalPackets;
+      setPps(prev => Math.round(prev * 0.7 + Math.max(0, delta) * 0.3));
+    }, 2000);
+    return () => clearInterval(t);
+  }, [mounted, stats.totalPackets]);
+
+  const threatLevel = stats.threatLevelDistribution.critical > 0
+    ? 'Critical'
+    : stats.threatLevelDistribution.high > 0
+    ? 'High'
+    : stats.threatLevelDistribution.medium > 0
+    ? 'Medium'
+    : 'Low';
 
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
       <StatsCard
         title="Total Packets"
         value={stats.totalPackets.toLocaleString()}
-        subtitle="Analyzed"
+        subtitle="Analyzed (24h)"
         icon={<Database className="w-4 h-4" />}
+        accent="cyan"
       />
       <StatsCard
-        title="Anomalies"
-        value={stats.anomalies}
-        subtitle="Detected"
+        title="Threats Detected"
+        value={stats.totalAnomalies.toLocaleString()}
+        subtitle={stats.detectionRate}
         icon={<AlertTriangle className="w-4 h-4" />}
+        accent="red"
       />
       <StatsCard
         title="Threat Level"
-        value={stats.threatLevel}
+        value={threatLevel}
         subtitle="Current"
         icon={<Shield className="w-4 h-4" />}
+        accent={
+          threatLevel === 'Critical' || threatLevel === 'High'
+            ? 'red'
+            : threatLevel === 'Medium'
+            ? 'amber'
+            : 'emerald'
+        }
+      />
+      <StatsCard
+        title="Blocked IPs"
+        value={stats.blockedIPs}
+        subtitle="Auto-response"
+        icon={<Ban className="w-4 h-4" />}
+        accent="amber"
       />
       <StatsCard
         title="Packets/sec"
-        value={stats.packetsPerSec}
-        subtitle="Processing"
+        value={pps.toLocaleString()}
+        subtitle="Throughput"
         icon={<Activity className="w-4 h-4" />}
+        accent="blue"
       />
       <StatsCard
         title="Latency"
-        value={`${stats.detectionLatency.toFixed(1)}ms`}
-        subtitle="Detection"
+        value={`${latency.toFixed(1)}ms`}
+        subtitle="API"
         icon={<Cpu className="w-4 h-4" />}
-      />
-      <StatsCard
-        title="Uptime"
-        value={formatUptime(stats.uptime)}
-        subtitle="Session"
-        icon={<Clock className="w-4 h-4" />}
+        accent="cyan"
       />
     </div>
   );

@@ -47,8 +47,8 @@ class AutoResponseService {
     private blockEvents: BlockEvent[] = [];
     private config: AutoResponseConfig = {
         enabled: true,
-        threatThreshold: 0.85,
-        autoBlockDuration: 60, // 1 hour default
+        threatThreshold: 0.7, // confidence cutoff (0-1)
+        autoBlockDuration: 60,
         blockOnCritical: true,
         blockOnHigh: true,
         blockOnMedium: false,

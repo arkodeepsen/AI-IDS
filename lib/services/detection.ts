@@ -1,236 +1,262 @@
 /**
- * Detection Service
- * Central service for handling intrusion detection
+ * Detection service.
+ *
+ * Owns the singleton ensemble detector, runs predictions, and persists
+ * detection results + alerts + auto-block decisions to SQLite.
  */
 
 import { NetworkPacket, DetectionResult, DetectionMethod, AttackType } from '../types';
-import { EnsembleDetector, extractFeatures, generateTrainingData, generateLabeledTrainingData } from '../ml';
-import { autoResponseService } from '../services/auto-response';
-import { autoTrainingService } from '../services/auto-training';
-import { rlhfService } from '../services/rlhf';
+import {
+  EnsembleDetector,
+  extractFeatures,
+  generateLabeledTrainingData,
+} from '../ml';
+import { autoResponseService } from './auto-response';
+import { autoTrainingService } from './auto-training';
+import { rlhfService } from './rlhf';
+import prisma from '../prisma';
 
-// Global detector instance
 let detector: EnsembleDetector | null = null;
-let isInitialized = false;
+let initialized = false;
 
-/**
- * Initialize the detector with training data
- */
 export function initializeDetector(): EnsembleDetector {
-    if (!detector || !isInitialized) {
-        detector = new EnsembleDetector(rlhfService.getWeights());
-
-        // Generate labeled training data
-        const { features, labels, attackTypes } = generateLabeledTrainingData(500);
-        detector.fit(features, labels, attackTypes);
-
-        isInitialized = true;
-    }
-    return detector;
-}
-
-/**
- * Get the current detector instance
- */
-export function getDetector(): EnsembleDetector {
-    return initializeDetector();
-}
-
-/**
- * Reset and retrain the detector
- */
-export function retrainDetector(): void {
-    const weights = rlhfService.getWeights();
-    detector = new EnsembleDetector(weights);
-
-    const { features, labels, attackTypes } = generateLabeledTrainingData(500);
+  if (!detector || !initialized) {
+    detector = new EnsembleDetector(rlhfService.getWeights());
+    const { features, labels, attackTypes } = generateLabeledTrainingData(800);
     detector.fit(features, labels, attackTypes);
-
-    isInitialized = true;
+    initialized = true;
+  }
+  return detector;
 }
 
-/**
- * Detect anomaly in a network packet
- */
-export function detectAnomaly(
-    packet: NetworkPacket,
-    method: DetectionMethod = 'Ensemble'
-): DetectionResult {
-    const det = getDetector();
-    const features = extractFeatures(packet);
-    const prediction = det.predict(features);
-
-    let score: number;
-    switch (method) {
-        case 'Isolation Forest':
-            score = prediction.scores.isolationForest;
-            break;
-        case 'Autoencoder':
-            score = prediction.scores.autoencoder;
-            break;
-        case 'K-Means Clustering':
-            score = prediction.scores.kMeans;
-            break;
-        default:
-            score = prediction.score;
-    }
-
-    const isAnomaly = score > 0.5;
-    const threatLevel = getThreatLevel(score);
-    const attackType = isAnomaly ? classifyAttack(packet, score) : undefined;
-
-    const result: DetectionResult = {
-        id: crypto.randomUUID(),
-        timestamp: new Date(),
-        packet,
-        isAnomaly,
-        threatLevel,
-        attackType,
-        confidence: Math.min(score * 100, 100),
-        detectionMethod: method === 'Ensemble' ? 'Ensemble' : method,
-        description: generateDescription(isAnomaly, attackType, packet),
-        recommendations: isAnomaly ? generateRecommendations(attackType, threatLevel) : [],
-        modelScores: {
-            isolationForest: prediction.scores.isolationForest,
-            autoencoder: prediction.scores.autoencoder,
-            kMeans: prediction.scores.kMeans
-        }
-    };
-
-    // Auto-response evaluation
-    if (isAnomaly) {
-        const responseAction = autoResponseService.evaluateThreat(result);
-        result.autoResponseAction = responseAction.action === 'block' ? 'blocked' :
-            responseAction.action === 'alert' ? 'alerted' :
-                responseAction.action === 'monitor' ? 'monitored' : 'ignored';
-    }
-
-    // Add to training data
-    autoTrainingService.addDetectionData(result);
-
-    return result;
+export function getDetector(): EnsembleDetector {
+  return initializeDetector();
 }
 
-/**
- * Batch detection for multiple packets
- */
-export function detectBatch(
-    packets: NetworkPacket[],
-    method: DetectionMethod = 'Ensemble'
-): DetectionResult[] {
-    return packets.map(packet => detectAnomaly(packet, method));
+export function retrainDetector(): void {
+  detector = new EnsembleDetector(rlhfService.getWeights());
+  const { features, labels, attackTypes } = generateLabeledTrainingData(800);
+  detector.fit(features, labels, attackTypes);
+  initialized = true;
 }
 
-/**
- * Get threat level from score
- */
 function getThreatLevel(score: number): 'low' | 'medium' | 'high' | 'critical' {
-    if (score > 0.9) return 'critical';
-    if (score > 0.7) return 'high';
-    if (score > 0.5) return 'medium';
-    return 'low';
+  if (score > 0.9) return 'critical';
+  if (score > 0.75) return 'high';
+  if (score > 0.5) return 'medium';
+  return 'low';
 }
 
-/**
- * Classify the attack type
- */
-function classifyAttack(packet: NetworkPacket, score: number): AttackType {
-    // Heuristic-based classification
-    if (packet.destPort === 22 && score > 0.7) return 'Brute Force';
-    if (packet.destPort === 3389 && score > 0.7) return 'Brute Force';
-    if (packet.protocol === 'ICMP' && packet.packetSize > 1000) return 'DoS';
-    if (packet.sourcePort < 1024 && packet.destPort < 1024) return 'Probe';
-    if ([80, 443, 8080].includes(packet.destPort) && score > 0.8) return 'SQL Injection';
-    if (packet.flags?.includes('SYN') && !packet.flags?.includes('ACK')) return 'Port Scan';
-
-    return 'Unknown';
+function classifyAttack(packet: NetworkPacket, hint?: string): AttackType {
+  if (hint && hint !== 'Unknown' && hint !== '') return hint as AttackType;
+  if (packet.destPort === 22) return 'Brute Force';
+  if (packet.destPort === 3389) return 'Brute Force';
+  if (packet.protocol === 'ICMP' && packet.packetSize > 1000) return 'DoS';
+  if ([80, 443, 8080].includes(packet.destPort)) return 'SQL Injection';
+  if (packet.flags?.includes('SYN') && !packet.flags?.includes('ACK')) return 'Port Scan';
+  if (packet.sourcePort < 1024 && packet.destPort < 1024) return 'Probe';
+  return 'Unknown';
 }
 
-/**
- * Generate detection description
- */
-function generateDescription(isAnomaly: boolean, attackType?: AttackType, packet?: NetworkPacket): string {
-    if (!isAnomaly) {
-        return 'Normal traffic pattern detected. No anomalies found.';
+const DESCRIPTIONS: Record<AttackType, string> = {
+  DoS: 'Potential Denial of Service attack. High volume of traffic from a single source.',
+  DDoS: 'Distributed Denial of Service pattern. Multiple sources targeting one host.',
+  Probe: 'Network reconnaissance. Likely port scanning or vulnerability probing.',
+  R2L: 'Remote-to-Local attack. Unauthorized access attempt from a remote host.',
+  U2R: 'User-to-Root privilege escalation attempt detected.',
+  'Brute Force': 'Brute-force authentication attack. Multiple failed login attempts.',
+  'Port Scan': 'Port scan in progress. Systematic probing of open ports.',
+  'SQL Injection': 'Suspected SQL injection in HTTP traffic.',
+  XSS: 'Cross-site scripting attempt detected in web traffic.',
+  Malware: 'Suspicious payload pattern indicating malware communication.',
+  Botnet: 'Botnet command-and-control traffic pattern detected.',
+  'Man-in-the-Middle': 'Possible MITM attack — ARP spoofing or SSL stripping.',
+  Unknown: 'Anomalous traffic pattern detected. Investigation recommended.',
+};
+
+const RECOMMENDATIONS: Record<AttackType, string[]> = {
+  DoS: ['Apply rate limiting', 'Engage DDoS mitigation', 'Block source IP temporarily'],
+  DDoS: ['Activate DDoS protection', 'Contact ISP for upstream filtering', 'Scale infrastructure'],
+  Probe: ['Update IDS signatures', 'Audit exposed services', 'Implement port knocking'],
+  R2L: ['Review authentication logs', 'Enforce stronger passwords', 'Enable MFA'],
+  U2R: ['Audit user privileges', 'Patch the system', 'Review sudo configs'],
+  'Brute Force': ['Lock the affected account', 'Add CAPTCHA', 'Use fail2ban'],
+  'Port Scan': ['Review firewall rules', 'Disable unused services', 'Deploy honeypots'],
+  'SQL Injection': ['Update WAF rules', 'Audit input validation', 'Parameterize queries'],
+  XSS: ['Set CSP headers', 'Sanitize user input', 'Update WAF'],
+  Malware: ['Isolate affected hosts', 'Run antimalware sweep', 'Audit network logs'],
+  Botnet: ['Block C2 IPs', 'Scan endpoints', 'Update endpoint protection'],
+  'Man-in-the-Middle': [
+    'Verify SSL certificates',
+    'Implement certificate pinning',
+    'Use encrypted protocols',
+  ],
+  Unknown: [
+    'Capture packet data for analysis',
+    'Correlate with other security events',
+    'Escalate to security team',
+  ],
+};
+
+export function detectAnomaly(
+  packet: NetworkPacket,
+  method: DetectionMethod = 'Ensemble'
+): DetectionResult {
+  const det = getDetector();
+  const features = extractFeatures(packet);
+  const prediction = det.predict(features);
+
+  let score: number;
+  switch (method) {
+    case 'Isolation Forest':
+      score = prediction.scores.isolationForest;
+      break;
+    case 'Autoencoder':
+      score = prediction.scores.autoencoder;
+      break;
+    case 'Random Forest':
+      score = prediction.scores.randomForest;
+      break;
+    case 'XGBoost':
+      score = prediction.scores.xgboost;
+      break;
+    default:
+      score = prediction.score;
+  }
+
+  const isAnomaly = score > 0.5;
+  const threatLevel = getThreatLevel(score);
+  const attackType = isAnomaly ? classifyAttack(packet, prediction.attackType) : undefined;
+
+  const result: DetectionResult = {
+    id: crypto.randomUUID(),
+    timestamp: new Date(),
+    packet,
+    isAnomaly,
+    threatLevel,
+    attackType,
+    confidence: Math.min(score * 100, 100),
+    detectionMethod: method,
+    description: isAnomaly
+      ? DESCRIPTIONS[attackType ?? 'Unknown']
+      : 'Normal traffic pattern. No anomaly detected.',
+    recommendations: isAnomaly ? RECOMMENDATIONS[attackType ?? 'Unknown'] : [],
+    modelScores: prediction.scores,
+  };
+
+  if (isAnomaly) {
+    const action = autoResponseService.evaluateThreat(result);
+    result.autoResponseAction =
+      action.action === 'block'
+        ? 'blocked'
+        : action.action === 'alert'
+        ? 'alerted'
+        : action.action === 'monitor'
+        ? 'monitored'
+        : 'ignored';
+  }
+
+  autoTrainingService.addDetectionData(result);
+  return result;
+}
+
+export function detectBatch(
+  packets: NetworkPacket[],
+  method: DetectionMethod = 'Ensemble'
+): DetectionResult[] {
+  return packets.map(p => detectAnomaly(p, method));
+}
+
+export async function persistDetection(result: DetectionResult): Promise<void> {
+  try {
+    const packet = await prisma.networkPacket.create({
+      data: {
+        sourceIP: result.packet.sourceIP,
+        destIP: result.packet.destIP,
+        sourcePort: result.packet.sourcePort,
+        destPort: result.packet.destPort,
+        protocol: result.packet.protocol,
+        packetSize: result.packet.packetSize,
+        flags: result.packet.flags,
+      },
+    });
+
+    await prisma.detectionResult.create({
+      data: {
+        packetId: packet.id,
+        isAnomaly: result.isAnomaly,
+        threatLevel: result.threatLevel.toUpperCase(),
+        attackType: result.attackType,
+        confidence: result.confidence,
+        detectionMethod: result.detectionMethod,
+        description: result.description,
+        recommendations: JSON.stringify(result.recommendations),
+        modelScores: JSON.stringify(result.modelScores ?? {}),
+        autoResponse: result.autoResponseAction ?? null,
+      },
+    });
+
+    if (result.isAnomaly && result.autoResponseAction !== 'ignored') {
+      await prisma.alert.create({
+        data: {
+          severity: result.threatLevel.toUpperCase(),
+          title: `${result.attackType ?? 'Anomaly'} detected`,
+          message: result.description,
+          sourceIP: result.packet.sourceIP,
+          destIP: result.packet.destIP,
+          attackType: result.attackType ?? 'Unknown',
+          status: 'NEW',
+        },
+      });
     }
 
-    const descriptions: Record<AttackType, string> = {
-        'DoS': 'Potential Denial of Service attack detected. High volume of traffic from single source.',
-        'DDoS': 'Distributed Denial of Service attack pattern detected. Multiple sources targeting single destination.',
-        'Probe': 'Network reconnaissance activity detected. Possible port scanning or vulnerability probing.',
-        'R2L': 'Remote to Local attack pattern detected. Unauthorized access attempt from remote host.',
-        'U2R': 'User to Root privilege escalation attempt detected.',
-        'Brute Force': 'Brute force authentication attack detected. Multiple failed login attempts.',
-        'Port Scan': 'Port scanning activity detected. Systematic probing of network ports.',
-        'SQL Injection': 'Potential SQL injection attack detected in HTTP traffic.',
-        'XSS': 'Cross-site scripting attempt detected in web traffic.',
-        'Malware': 'Potential malware communication detected. Suspicious payload patterns.',
-        'Botnet': 'Botnet command and control traffic pattern detected.',
-        'Man-in-the-Middle': 'Potential MITM attack detected. ARP spoofing or SSL stripping activity.',
-        'Unknown': 'Anomalous traffic pattern detected. Further investigation recommended.'
-    };
-
-    return descriptions[attackType || 'Unknown'];
+    if (result.autoResponseAction === 'blocked') {
+      await prisma.blockedIP
+        .upsert({
+          where: { ipAddress: result.packet.sourceIP },
+          update: {
+            reason: `Auto-blocked: ${result.attackType ?? 'Anomaly'}`,
+            attackType: result.attackType ?? null,
+            confidence: result.confidence,
+            autoBlocked: true,
+          },
+          create: {
+            ipAddress: result.packet.sourceIP,
+            reason: `Auto-blocked: ${result.attackType ?? 'Anomaly'}`,
+            attackType: result.attackType ?? null,
+            confidence: result.confidence,
+            autoBlocked: true,
+            expiresAt:
+              result.threatLevel === 'critical'
+                ? null
+                : new Date(Date.now() + 24 * 60 * 60 * 1000),
+          },
+        })
+        .catch(() => {});
+    }
+  } catch (err) {
+    console.error('persistDetection error:', err);
+  }
 }
 
-/**
- * Generate security recommendations
- */
-function generateRecommendations(attackType?: AttackType, threatLevel?: string): string[] {
-    const baseRecommendations = [
-        'Monitor the source IP for continued suspicious activity',
-        'Review firewall rules and update if necessary',
-        'Document the incident for security audit'
-    ];
-
-    const specificRecommendations: Record<AttackType, string[]> = {
-        'DoS': ['Implement rate limiting', 'Consider DDoS mitigation service', 'Block source IP temporarily'],
-        'DDoS': ['Activate DDoS protection', 'Contact ISP for upstream filtering', 'Scale infrastructure if possible'],
-        'Probe': ['Update IDS signatures', 'Review exposed services', 'Implement port knocking'],
-        'R2L': ['Review authentication logs', 'Enforce stronger password policies', 'Enable MFA'],
-        'U2R': ['Audit user privileges', 'Update system patches', 'Review sudo configurations'],
-        'Brute Force': ['Implement account lockout', 'Enable CAPTCHA', 'Use fail2ban or similar'],
-        'Port Scan': ['Review firewall rules', 'Disable unnecessary services', 'Implement honeypots'],
-        'SQL Injection': ['Update WAF rules', 'Review application input validation', 'Parameterize SQL queries'],
-        'XSS': ['Implement CSP headers', 'Sanitize user inputs', 'Update web application firewall'],
-        'Malware': ['Isolate affected systems', 'Run antimalware scans', 'Review network traffic logs'],
-        'Botnet': ['Block C2 server IPs', 'Scan network for infected hosts', 'Update endpoint protection'],
-        'Man-in-the-Middle': ['Verify SSL certificates', 'Implement certificate pinning', 'Use encrypted protocols'],
-        'Unknown': ['Capture packet data for analysis', 'Correlate with other security events', 'Escalate to security team']
-    };
-
-    return [...(specificRecommendations[attackType || 'Unknown'] || []), ...baseRecommendations];
-}
-
-/**
- * Submit feedback for a detection (RLHF)
- */
 export function submitDetectionFeedback(
-    detectionId: string,
-    isCorrect: boolean,
-    detectionMethod?: string
+  detectionId: string,
+  isCorrect: boolean,
+  detectionMethod?: string
 ): void {
-    rlhfService.addFeedback({
-        detectionId,
-        isCorrect,
-        modelMethod: detectionMethod
-    });
+  rlhfService.addFeedback({ detectionId, isCorrect, modelMethod: detectionMethod });
 }
 
-/**
- * Get current system statistics
- */
 export function getSystemStats() {
-    const trainingStats = autoTrainingService.getStats();
-    const responseStats = autoResponseService.getStats();
-    const rlhfMetrics = rlhfService.getMetrics();
-
-    return {
-        modelVersion: trainingStats.modelVersion,
-        totalTrainingSamples: trainingStats.totalSamples,
-        blockedIPs: responseStats.totalBlocked,
-        autoBlockedIPs: responseStats.autoBlocked,
-        feedbackCount: rlhfMetrics.totalFeedback,
-        modelAccuracy: rlhfMetrics.accuracyRate
-    };
+  const trainingStats = autoTrainingService.getStats();
+  const responseStats = autoResponseService.getStats();
+  const rlhfMetrics = rlhfService.getMetrics();
+  return {
+    modelVersion: trainingStats.modelVersion,
+    totalTrainingSamples: trainingStats.totalSamples,
+    blockedIPs: responseStats.totalBlocked,
+    autoBlockedIPs: responseStats.autoBlocked,
+    feedbackCount: rlhfMetrics.totalFeedback,
+    modelAccuracy: rlhfMetrics.accuracyRate,
+  };
 }

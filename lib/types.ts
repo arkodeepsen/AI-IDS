@@ -1,10 +1,10 @@
 /**
- * Types for the AI-Based Intrusion Detection System
+ * Shared types for the AI-Based Intrusion Detection System.
  */
 
-// ============================================
-// Network Types
-// ============================================
+// ==========================================================================
+// Network
+// ==========================================================================
 
 export interface NetworkPacket {
   id: string;
@@ -34,9 +34,9 @@ export interface NetworkFlow {
   flowEnd: Date;
 }
 
-// ============================================
-// Detection Types
-// ============================================
+// ==========================================================================
+// Detection
+// ==========================================================================
 
 export interface DetectionResult {
   id: string;
@@ -52,7 +52,8 @@ export interface DetectionResult {
   modelScores?: {
     isolationForest: number;
     autoencoder: number;
-    kMeans: number;
+    randomForest: number;
+    xgboost: number;
   };
   autoResponseAction?: 'blocked' | 'alerted' | 'monitored' | 'ignored';
 }
@@ -75,12 +76,13 @@ export type AttackType =
 export type DetectionMethod =
   | 'Isolation Forest'
   | 'Autoencoder'
-  | 'K-Means Clustering'
+  | 'Random Forest'
+  | 'XGBoost'
   | 'Ensemble';
 
-// ============================================
-// ML Model Types
-// ============================================
+// ==========================================================================
+// ML
+// ==========================================================================
 
 export interface MLModelMetrics {
   method: DetectionMethod;
@@ -95,12 +97,13 @@ export interface MLModelMetrics {
 export interface ModelWeights {
   isolationForest: number;
   autoencoder: number;
-  kMeans: number;
+  randomForest: number;
+  xgboost: number;
 }
 
-// ============================================
-// System Types
-// ============================================
+// ==========================================================================
+// System
+// ==========================================================================
 
 export interface SystemStats {
   totalPacketsAnalyzed: number;
@@ -128,9 +131,9 @@ export interface Alert {
   autoBlocked?: boolean;
 }
 
-// ============================================
-// Dataset Types
-// ============================================
+// ==========================================================================
+// Datasets
+// ==========================================================================
 
 export interface DatasetInfo {
   name: string;
@@ -142,9 +145,9 @@ export interface DatasetInfo {
   attackRatio: number;
 }
 
-// ============================================
-// API Types
-// ============================================
+// ==========================================================================
+// API
+// ==========================================================================
 
 export interface AnalysisRequest {
   packets: NetworkPacket[];
@@ -165,9 +168,9 @@ export interface GeminiAnalysisResponse {
   technicalDetails: string;
 }
 
-// ============================================
-// Chart Types
-// ============================================
+// ==========================================================================
+// Charts
+// ==========================================================================
 
 export interface ChartDataPoint {
   time: string;
@@ -183,9 +186,9 @@ export interface ThreatDistribution {
   color: string;
 }
 
-// ============================================
-// RLHF Types
-// ============================================
+// ==========================================================================
+// Active Learning (HITL)
+// ==========================================================================
 
 export interface RLHFFeedbackSubmission {
   detectionId: string;
@@ -195,9 +198,9 @@ export interface RLHFFeedbackSubmission {
   notes?: string;
 }
 
-// ============================================
-// Auto-Response Types
-// ============================================
+// ==========================================================================
+// Auto-Response
+// ==========================================================================
 
 export interface AutoResponseSettings {
   enabled: boolean;
@@ -208,9 +211,9 @@ export interface AutoResponseSettings {
   blockOnMedium: boolean;
 }
 
-// ============================================
-// Training Types
-// ============================================
+// ==========================================================================
+// Training
+// ==========================================================================
 
 export interface TrainingStatus {
   enabled: boolean;
