@@ -1,5 +1,5 @@
 /**
- * Controls Components Barrel Export
+ * Controls components barrel export.
  */
 
 export { default as RLHFFeedbackPanel } from './RLHFFeedbackPanel';

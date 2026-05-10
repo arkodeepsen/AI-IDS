@@ -1,0 +1,89 @@
+{
+  "trainedAt": "2026-05-10T17:59:05.378Z",
+  "dataset": "NSL-KDD",
+  "trainingSamples": 25000,
+  "testingSamples": 8000,
+  "perModel": [
+    {
+      "method": "Isolation Forest",
+      "threshold": 0.45,
+      "accuracy": 0.809375,
+      "precision": 0.8184468040807829,
+      "recall": 0.8575479930191972,
+      "f1Score": 0.8375412804943007,
+      "falsePositiveRate": 0.25526932084309134,
+      "tp": 3931,
+      "fp": 872,
+      "tn": 2544,
+      "fn": 653
+    },
+    {
+      "method": "Autoencoder",
+      "threshold": 0.45,
+      "accuracy": 0.7875,
+      "precision": 0.8148471615720524,
+      "recall": 0.8141361256544503,
+      "f1Score": 0.8144914884329988,
+      "falsePositiveRate": 0.24824355971896955,
+      "tp": 3732,
+      "fp": 848,
+      "tn": 2568,
+      "fn": 852
+    },
+    {
+      "method": "Random Forest",
+      "threshold": 0.3,
+      "accuracy": 0.862125,
+      "precision": 0.9300716580182852,
+      "recall": 0.8211169284467714,
+      "f1Score": 0.8722048430077628,
+      "falsePositiveRate": 0.08284543325526932,
+      "tp": 3764,
+      "fp": 283,
+      "tn": 3133,
+      "fn": 820
+    },
+    {
+      "method": "XGBoost",
+      "threshold": 0.35,
+      "accuracy": 0.869125,
+      "precision": 0.8877439158079369,
+      "recall": 0.8832897033158813,
+      "f1Score": 0.8855112083105523,
+      "falsePositiveRate": 0.14988290398126464,
+      "tp": 4049,
+      "fp": 512,
+      "tn": 2904,
+      "fn": 535
+    },
+    {
+      "method": "Ensemble",
+      "threshold": 0.35,
+      "accuracy": 0.909875,
+      "precision": 0.8771724272603008,
+      "recall": 0.9799301919720768,
+      "f1Score": 0.9257083977331272,
+      "falsePositiveRate": 0.18413348946135832,
+      "tp": 4492,
+      "fp": 629,
+      "tn": 2787,
+      "fn": 92
+    }
+  ],
+  "classDistribution": {
+    "train": {
+      "normal": 10132,
+      "R2L": 5970,
+      "Probe": 1709,
+      "DoS": 6877,
+      "U2R": 312
+    },
+    "test": {
+      "normal": 3416,
+      "Probe": 853,
+      "DoS": 2657,
+      "R2L": 1050,
+      "U2R": 24
+    }
+  }
+}

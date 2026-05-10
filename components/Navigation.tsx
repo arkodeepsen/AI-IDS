@@ -10,7 +10,8 @@ import {
   Menu,
   X,
   Zap,
-  GraduationCap
+  GraduationCap,
+  Bot,
 } from 'lucide-react';
 
 interface NavItem {
@@ -29,34 +30,35 @@ export default function Navigation({ activeTab, onTabChange }: NavigationProps) 
 
   const navItems: NavItem[] = [
     { id: 'dashboard', label: 'Dashboard', icon: <Activity className="w-4 h-4" /> },
-    { id: 'detection', label: 'Detection', icon: <Shield className="w-4 h-4" /> },
+    { id: 'detection', label: 'Detections', icon: <Shield className="w-4 h-4" /> },
     { id: 'models', label: 'ML Models', icon: <Brain className="w-4 h-4" /> },
     { id: 'auto-response', label: 'Auto-Response', icon: <Zap className="w-4 h-4" /> },
     { id: 'training', label: 'Training', icon: <GraduationCap className="w-4 h-4" /> },
     { id: 'datasets', label: 'Datasets', icon: <Database className="w-4 h-4" /> },
     { id: 'alerts', label: 'Alerts', icon: <Bell className="w-4 h-4" /> },
+    { id: 'assistant', label: 'AI Assistant', icon: <Bot className="w-4 h-4" /> },
   ];
 
   return (
-    <nav className="border-b border-zinc-800 bg-zinc-950 sticky top-0 z-50">
+    <nav className="border-b border-zinc-800 bg-zinc-950/95 backdrop-blur sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <div className="flex items-center justify-between h-14">
-          {/* Logo */}
           <div className="flex items-center gap-2">
-            <Shield className="w-5 h-5 text-blue-500" />
-            <span className="text-base font-semibold text-white">AI-IDS</span>
+            <div className="w-7 h-7 rounded-md bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center">
+              <Shield className="w-4 h-4 text-cyan-400" />
+            </div>
+            <span className="text-base font-semibold text-white tracking-wide">AI-IDS</span>
           </div>
 
-          {/* Desktop Navigation */}
-          <div className="hidden md:flex items-center gap-1">
-            {navItems.map((item) => (
+          <div className="hidden md:flex items-center gap-1 overflow-x-auto">
+            {navItems.map(item => (
               <button
                 key={item.id}
                 onClick={() => onTabChange(item.id)}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm transition-colors ${
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm transition-colors whitespace-nowrap ${
                   activeTab === item.id
-                    ? 'bg-zinc-800 text-white'
-                    : 'text-zinc-400 hover:text-white hover:bg-zinc-800/50'
+                    ? 'bg-cyan-500/10 text-cyan-300 border border-cyan-500/30'
+                    : 'text-zinc-400 hover:text-white hover:bg-zinc-800/50 border border-transparent'
                 }`}
               >
                 {item.icon}
@@ -65,13 +67,11 @@ export default function Navigation({ activeTab, onTabChange }: NavigationProps) 
             ))}
           </div>
 
-          {/* Status */}
           <div className="hidden md:flex items-center gap-2">
             <span className="status-dot active" />
             <span className="text-xs text-zinc-500">System Active</span>
           </div>
 
-          {/* Mobile Menu Button */}
           <button
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
             className="md:hidden p-2 text-zinc-400 hover:text-white"
@@ -81,11 +81,10 @@ export default function Navigation({ activeTab, onTabChange }: NavigationProps) 
         </div>
       </div>
 
-      {/* Mobile Menu */}
       {isMobileMenuOpen && (
         <div className="md:hidden border-t border-zinc-800 bg-zinc-950">
           <div className="px-4 py-2 space-y-1">
-            {navItems.map((item) => (
+            {navItems.map(item => (
               <button
                 key={item.id}
                 onClick={() => {
@@ -94,7 +93,7 @@ export default function Navigation({ activeTab, onTabChange }: NavigationProps) 
                 }}
                 className={`flex items-center gap-3 w-full px-3 py-2 rounded-md text-sm transition-colors ${
                   activeTab === item.id
-                    ? 'bg-zinc-800 text-white'
+                    ? 'bg-cyan-500/10 text-cyan-300'
                     : 'text-zinc-400 hover:text-white hover:bg-zinc-800/50'
                 }`}
               >

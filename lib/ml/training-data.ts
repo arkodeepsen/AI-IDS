@@ -50,13 +50,16 @@ export function generateLabeledTrainingData(numSamples: number = 1000): {
     const labels: boolean[] = [];
     const attackTypes: string[] = [];
 
+    // Bumped attack ratios from ~20% to ~40% so the supervised models learn
+    // more discriminative boundaries. Real-world IDS data is usually much
+    // less attack-heavy; we synthesise a richer attack distribution here.
     const attackPatterns = [
-        { type: 'DoS', ratio: 0.05, pattern: () => generateDoSPattern() },
-        { type: 'Port Scan', ratio: 0.04, pattern: () => generatePortScanPattern() },
-        { type: 'Brute Force', ratio: 0.03, pattern: () => generateBruteForcePattern() },
-        { type: 'Probe', ratio: 0.03, pattern: () => generateProbePattern() },
-        { type: 'SQL Injection', ratio: 0.02, pattern: () => generateWebAttackPattern() },
-        { type: 'DDoS', ratio: 0.03, pattern: () => generateDDoSPattern() },
+        { type: 'DoS', ratio: 0.10, pattern: () => generateDoSPattern() },
+        { type: 'Port Scan', ratio: 0.08, pattern: () => generatePortScanPattern() },
+        { type: 'Brute Force', ratio: 0.07, pattern: () => generateBruteForcePattern() },
+        { type: 'Probe', ratio: 0.05, pattern: () => generateProbePattern() },
+        { type: 'SQL Injection', ratio: 0.04, pattern: () => generateWebAttackPattern() },
+        { type: 'DDoS', ratio: 0.06, pattern: () => generateDDoSPattern() },
     ];
 
     for (let i = 0; i < numSamples; i++) {

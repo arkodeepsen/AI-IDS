@@ -1,19 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { Severity, AlertStatus } from '@prisma/client';
 
-// GET - Fetch alerts with optional filters
+const VALID_STATUSES = new Set(['NEW', 'INVESTIGATING', 'RESOLVED', 'FALSE_POSITIVE']);
+const TERMINAL_STATUSES = new Set(['RESOLVED', 'FALSE_POSITIVE']);
+
+function normaliseStatus(input: unknown): string | null {
+  if (typeof input !== 'string' || !input.trim()) return null;
+  const upper = input.toUpperCase().replace(/-/g, '_');
+  return VALID_STATUSES.has(upper) ? upper : null;
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const status = searchParams.get('status') as AlertStatus | null;
-    const severity = searchParams.get('severity') as Severity | null;
-    const limit = parseInt(searchParams.get('limit') || '20');
-    const offset = parseInt(searchParams.get('offset') || '0');
+    const status = searchParams.get('status');
+    const severity = searchParams.get('severity');
+    const limit = Math.min(parseInt(searchParams.get('limit') ?? '20'), 200);
+    const offset = parseInt(searchParams.get('offset') ?? '0');
 
-    const where: Record<string, unknown> = {};
-    if (status) where.status = status;
-    if (severity) where.severity = severity;
+    const where: Record<string, string> = {};
+    if (status) {
+      const norm = normaliseStatus(status);
+      if (norm) where.status = norm;
+    }
+    if (severity) where.severity = severity.toUpperCase();
 
     const [alerts, total] = await Promise.all([
       prisma.alert.findMany({
@@ -27,13 +37,12 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      alerts,
-      pagination: {
-        total,
-        limit,
-        offset,
-        hasMore: offset + alerts.length < total,
-      },
+      alerts: alerts.map(a => ({
+        ...a,
+        severity: a.severity.toLowerCase(),
+        status: a.status.toLowerCase(),
+      })),
+      pagination: { total, limit, offset, hasMore: offset + alerts.length < total },
     });
   } catch (error) {
     console.error('Failed to fetch alerts:', error);
@@ -44,21 +53,27 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST - Create a new alert
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const { severity, title, message, sourceIP, destIP, attackType } = body;
 
+    if (typeof severity !== 'string' || !title || !message || !sourceIP || !destIP) {
+      return NextResponse.json(
+        { success: false, error: 'severity, title, message, sourceIP and destIP are required' },
+        { status: 400 }
+      );
+    }
+
     const alert = await prisma.alert.create({
       data: {
-        severity: severity as Severity,
+        severity: severity.toUpperCase(),
         title,
         message,
         sourceIP,
         destIP,
         attackType,
-        status: AlertStatus.NEW,
+        status: 'NEW',
       },
     });
 
@@ -72,24 +87,37 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// PATCH - Update alert status
 export async function PATCH(request: NextRequest) {
   try {
     const body = await request.json();
     const { id, status, notes, handledBy } = body;
 
-    const updateData: Record<string, unknown> = { status };
-    if (notes) updateData.notes = notes;
-    if (handledBy) updateData.handledBy = handledBy;
-    if (status === AlertStatus.RESOLVED || status === AlertStatus.FALSE_POSITIVE) {
-      updateData.handledAt = new Date();
+    if (typeof id !== 'string' || !id) {
+      return NextResponse.json(
+        { success: false, error: 'id is required' },
+        { status: 400 }
+      );
     }
 
-    const alert = await prisma.alert.update({
-      where: { id },
-      data: updateData,
-    });
+    const normStatus = normaliseStatus(status);
+    if (!normStatus) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `status must be one of ${Array.from(VALID_STATUSES).join(', ')}`,
+        },
+        { status: 400 }
+      );
+    }
 
+    const data: Record<string, unknown> = { status: normStatus };
+    if (typeof notes === 'string') data.notes = notes;
+    if (typeof handledBy === 'string') data.handledBy = handledBy;
+    if (TERMINAL_STATUSES.has(normStatus)) {
+      data.handledAt = new Date();
+    }
+
+    const alert = await prisma.alert.update({ where: { id }, data });
     return NextResponse.json({ success: true, alert });
   } catch (error) {
     console.error('Failed to update alert:', error);
