@@ -52,3 +52,6 @@ prisma/dev.db-journal
 # NSL-KDD raw data (download with `npm run data:download`)
 data/KDDTrain+.txt
 data/KDDTest+.txt
+
+# CICIDS-2017 data (download via scripts/download-cicids.py or signed Kaggle URL)
+/data/cicids/
