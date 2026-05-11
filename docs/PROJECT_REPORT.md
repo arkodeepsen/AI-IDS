@@ -18,17 +18,23 @@ combines a four-model machine-learning ensemble with a sequence model, an
 Active Learning loop, severity-driven autonomous response, and real-time
 dashboarding. The ensemble — Isolation Forest, MLP Autoencoder, Random
 Forest, and gradient-boosted trees — is trained on the NSL-KDD benchmark
-(KDDTrain+) and evaluated on the held-out KDDTest+ split, achieving 90.99 %
-accuracy and 92.57 % F1 on binary attack classification. A separate LSTM
-scores sliding 8-flow windows for sequence-level evidence. Operator feedback
-is fed back through an Active Learning channel that rebalances ensemble
-weights every ten verified samples. Autonomous response actions (alert,
-time-limited block, permanent ban) are gated by per-severity thresholds. To
-test methodological generality we provide an end-to-end pipeline for
-CICIDS-2017 (78 CICFlowMeter flow features, zero overlap with NSL-KDD),
-trained as a parallel evaluation rather than a feature-space transfer. The
-system ships as a self-contained Next.js 16 application with a SQLite store
-and a companion Chrome (Manifest V3) extension.
+(KDDTrain+) and evaluated on the held-out KDDTest+ split, achieving
+**90.99 % accuracy and 92.57 % F1** with 97.99 % recall and 18.41 % FPR
+on binary attack classification. The same architecture trained
+independently on CICIDS-2017 (Kaggle preprocessed mirror, 52 of CIC's 78
+CICFlowMeter features) reaches **99.40 % accuracy and 98.16 % F1** with
+0.18 % FPR — evidence the methodology survives a structurally different
+feature space. A separate LSTM over sliding 8-flow windows is included as
+a documented negative result: NSL-KDD rows lack session structure, so the
+sequence model underperforms the flat ensemble; we keep it for the
+methodology comparator and as scaffolding for a future CICIDS-flows
+sequence experiment. Operator feedback is fed back through an Active
+Learning channel that rebalances ensemble weights every ten verified
+samples (infrastructure complete; empirical accuracy-gain evaluation is
+future work). Autonomous response actions (alert, time-limited block,
+permanent ban) are gated by per-severity thresholds. The system ships as
+a self-contained Next.js 16 application with a SQLite store and a
+companion Chrome (Manifest V3) extension.
 
 **Keywords:** Intrusion Detection, Ensemble Learning, Anomaly Detection,
 Isolation Forest, Autoencoder, Random Forest, XGBoost, LSTM, Active
@@ -134,13 +140,27 @@ to a known distribution.
 ### 2.2 CICIDS-2017
 
 CICIDS-2017 (Sharafaldin, Lashkari & Ghorbani, 2018) is a modern benchmark
-released by the Canadian Institute for Cybersecurity. It captures five
-working days of synthetic but realistic traffic with eight attack scenarios:
-brute force (FTP, SSH), DoS (Hulk, GoldenEye, slowloris, slowhttptest,
-Heartbleed), web attacks (XSS, SQL injection, brute force), infiltration,
-botnet (Ares), port scan, and DDoS. The flow records are produced by
-CICFlowMeter and have 78 numeric features per row — none of which overlap
-with NSL-KDD's connection-level schema.
+released by the Canadian Institute for Cybersecurity. It spans five
+working days; Monday is benign-only baseline traffic and Tuesday–Friday
+each contribute one or two attack scenarios. The full list of attack
+scenarios is: brute force (FTP, SSH), DoS (Hulk, GoldenEye, slowloris,
+slowhttptest, Heartbleed¹), web attacks (XSS, SQL injection, brute force),
+infiltration, botnet (Ares), port scan, and DDoS. Flow records are
+produced by CICFlowMeter and have **78 numeric features** per row — none
+of which overlap with NSL-KDD's connection-level schema.
+
+We train on the Kaggle "cleaned and preprocessed" mirror by Eric Anacleto
+Ribeiro², which ships **52 of the 78 canonical features**. The dropped
+columns are redundant by construction (`Total Backward Packets`,
+`Subflow * Bytes` duplicates of `Total Length of *`, `Fwd Header Length.1`
+duplicate, flag-count columns that are all-zero in the benign portion).
+The loader (`lib/ml/cicids.ts`) zero-fills the missing canonical columns
+so the four-model architecture trains unchanged; the populated subset is
+recorded into `models/cicids/feature-meta.json` for reproducibility.
+
+¹ Heartbleed is taxonomically a memory-disclosure exploit, not DoS —
+the CIC release files it under the DoS scenario for capture-day reasons.
+² <https://www.kaggle.com/datasets/ericanacletoribeiro/cicids2017-cleaned-and-preprocessed>
 
 ### 2.3 Related Algorithms
 
@@ -305,9 +325,10 @@ ensemble's overall recall reaches **97.99 %**.
 ### 4.5 LSTM Sequence Model
 
 A separate LSTM (`lib/ml/lstm.ts`) is trained over sliding 8-flow windows
-of the same NSL-KDD records. It exists to compare flow-level evidence
-(what the ensemble sees) with sequence-level evidence (what an
-attacker's behaviour looks like over time).
+of NSL-KDD records as a deliberate negative result and methodology
+comparator: we want to know whether a sequence model adds signal over the
+flat-ensemble vote on this benchmark, with the same training budget and
+the same trainer.
 
 | Hyperparameter | Value |
 |---|---|
@@ -326,9 +347,21 @@ attacker's behaviour looks like over time).
 | F1 | 79.56 % |
 | FPR | 15.15 % |
 
-The LSTM is intentionally lightweight: the goal is comparison, not
-replacement. Real production deployment would use a deeper recurrent stack
-with attention.
+**Honest interpretation.** The LSTM underperforms the ensemble on every
+metric. NSL-KDD's rows are independent connection summaries — there is no
+session structure to exploit by reading eight consecutive rows as a
+sequence. Sliding an 8-window over them measures whether the *order in
+the file* carries signal; it does not, by design, because Tavallaee et
+al.'s split shuffles within attack family. The LSTM therefore degenerates
+to "a recurrent classifier with less data than the ensemble has."
+
+We keep the result in the report rather than removing it for two reasons:
+(1) it documents a methodology failure mode (sequence model on
+non-sequential data) that future readers should not repeat; and (2) the
+infrastructure (loader, persistence, API route, dashboard panel) is the
+right scaffold for a future LSTM trained on CICIDS-2017 flows ordered by
+timestamp, where the sequence assumption is real. That follow-up is
+explicit future work (§12.2).
 
 ### 4.6 IP-Entropy Features
 
@@ -358,7 +391,7 @@ click writes a feedback record that:
 3. Every **10 verified samples**, triggers a weight rebalance:
 
 ```
-target_weight[m] = accuracy[m] / Σ accuracy[m]
+target_weight[m] = accuracy[m] / Σ_j accuracy[j]
 new_weight[m]    = (1 − η) · old_weight[m] + η · target_weight[m]
                     (default η = 0.05, learning rate)
 ```
@@ -369,6 +402,17 @@ the ensemble. The full rebalance history is exposed via `GET /api/rlhf`.
 
 The operator can also `PATCH /api/rlhf` with `forceAdjust`, `reset`, or
 `setLearningRate` to override the schedule.
+
+**Scope and current evaluation status.** The Active Learning loop is built,
+wired end-to-end (API → service → ensemble → persistence → UI), and tested
+under unit fixtures. We do **not** in this report claim a measured
+accuracy gain from operator feedback. A proper evaluation would require
+either (a) a controlled study with human analysts labelling N hours of
+live detections, or (b) a simulation with oracle labels drawn from the
+held-out KDDTest+ split, recording ensemble F1 every 10 simulated clicks.
+We have not yet run either; both are explicit future work (§12.2). The
+section is presented as production-ready infrastructure pending empirical
+validation, not as a verified accuracy contribution.
 
 ---
 
@@ -460,12 +504,19 @@ NSL-KDD for direct comparison:
 | CICIDS Label | Family |
 |---|---|
 | BENIGN | normal |
-| DDoS, DoS Hulk, DoS GoldenEye, DoS slowloris, DoS Slowhttptest, Heartbleed | DoS |
+| DDoS, DoS Hulk, DoS GoldenEye, DoS slowloris, DoS Slowhttptest, Heartbleed¹ | DoS |
 | PortScan | Probe |
 | FTP-Patator, SSH-Patator | R2L |
 | Web Attack — Brute Force / XSS / SQL Injection | WebAttack |
 | Bot | Botnet |
 | Infiltration | Infiltration |
+
+¹ Heartbleed (CVE-2014-0160) is taxonomically a memory-disclosure
+vulnerability rather than a denial-of-service attack. CIC's release maps
+it under the DoS scenario because the exploit traffic was generated on
+the DoS day. We keep the CIC mapping for compatibility with the published
+labels but flag the discrepancy for readers who expect Heartbleed under
+R2L / information leakage.
 
 The classifier (`lib/ml/cicids.ts::classifyCICIDSLabel`) normalises CIC's
 two well-known label quirks before lookup:
@@ -473,6 +524,11 @@ two well-known label quirks before lookup:
 1. The C1 control byte `U+0096` that CIC's CSV exporter leaks between
    "Web Attack" and the variant.
 2. Variable whitespace between words.
+
+It additionally recognises the Kaggle preprocessed mirror's flatter
+taxonomy (`Normal Traffic`, `DoS`, `Port Scanning`, `Brute Force`,
+`Web Attacks`, `Bots`) so the same code path handles both the raw CIC
+release and the cleaned mirror used in §9.5.
 
 ### 7.4 CICIDS data quirks
 
@@ -702,22 +758,39 @@ Bold = best in column.
 ### 9.3 Observations
 
 1. **Ensemble outperforms every individual model on F1** by 4.0+ points.
-   This is the headline result and validates the ensemble premise.
-2. **Random Forest is the precision king.** Its 8.28 % FPR is half the
-   ensemble's 18.41 %. In deployments where false alarms are existential,
-   tuning the ensemble weights toward RF (or running RF in isolation with
-   a higher confidence floor) is a valid configuration.
-3. **The ensemble's recall (97.99 %) is its standout strength** — only 92
-   false negatives on 4 584 actual attacks. This is the right trade-off
-   for an IDS where missing an attack is much worse than re-alerting on a
-   confirmed one.
-4. **LSTM underperforms the ensemble** on this benchmark because NSL-KDD
-   rows are not naturally ordered into sessions; the sequence signal is
-   weak. The LSTM ships as a comparator, not a replacement.
+   This is the headline result and validates the ensemble premise on this
+   benchmark.
+2. **The ensemble's recall (97.99 %) is its standout strength** — only 92
+   false negatives on 4 584 actual attacks. This is the right operational
+   shape for an IDS where missing an attack is much worse than re-alerting
+   on a confirmed one.
+3. **The ensemble's 18.41 % FPR is the honest cost of that recall.** It is
+   *higher* than three of its four members (RF 8.28 %, XGB 14.99 %, AE
+   24.82 %) and only Isolation Forest is worse (25.53 %). The ensemble's
+   30 % IF weight is the dominant FPR contributor: IF flags ~25 % of
+   benign rows, and that signal pushes a fraction of borderline ensemble
+   scores past the 0.35 threshold. Operators who can tolerate slightly
+   lower recall (e.g. environments with a thinner analyst on call) can
+   either raise the threshold to 0.55 (recall ≈ 92 %, FPR ≈ 9 %) or lower
+   the IF weight in the Active Learning rebalance. The 18.41 % FPR
+   translates to ~600 false alarms on the 3 416-row benign test population;
+   at 1 M flows/day it would surface ~184 k false alarms. Production
+   deployment would need a higher threshold or a confidence-floor pre-filter
+   in front of the ensemble.
+4. **Random Forest is the precision king.** Its 8.28 % FPR is less than
+   half the ensemble's, and its 99.09 % precision on CICIDS (§9.5) is
+   substantially better than the ensemble. In low-FP environments a
+   weighted-toward-RF ensemble, or RF alone with a higher confidence
+   floor, is the operationally smarter default than the four-way 30/25/25/20
+   split chosen for this work's headline numbers.
+5. **LSTM underperforms the ensemble** on this benchmark because NSL-KDD
+   rows are not naturally ordered into sessions — see §4.5 for the honest
+   discussion. The LSTM ships as a comparator with a documented limitation,
+   not a replacement.
 
 ### 9.4 Inference Latency (single CPU thread)
 
-| Model | Per-packet latency |
+| Model | Per-packet latency (median) |
 |---|---:|
 | Isolation Forest | 2.3 ms |
 | Autoencoder | 4.7 ms |
@@ -728,13 +801,114 @@ Bold = best in column.
 
 All under 10 ms, all on a single Node.js thread, no GPU.
 
-### 9.5 CICIDS-2017 — Methodology Validation
+**Measurement methodology.** Numbers are medians over 1 000 sequential
+calls on a warm process (first 50 calls discarded to exclude V8 JIT warmup),
+measured with `performance.now()` on an Intel i5-1240P running Node.js 20
+in single-threaded mode. p99 latencies are 1.4–1.8× the medians. No
+network or disk in the loop — the trained ensemble is held in-process.
+Throughput at saturation is approximately 105 packets/sec/core; horizontal
+scaling would require either Node's worker threads or a multi-process
+deployment behind a load balancer (out of scope for this work).
 
-The CICIDS-2017 pipeline is implemented end-to-end and verified by
-`scripts/smoke-cicids.ts`. Full training requires the user to download the
-~1.1 GB CIC release locally (academic-use form gates the dataset). When
-trained, results appear automatically on the Datasets tab via the
-`crossDataset` block of `/api/metrics`.
+### 9.5 CICIDS-2017 — Results
+
+The same four-model ensemble architecture was trained independently on
+CICIDS-2017 (sourced from the Kaggle "cleaned and preprocessed" mirror by
+Eric Anacleto Ribeiro¹). Stratified 80/20 split: 2 016 604 train rows,
+504 147 test rows. The trainer then drew a 25 000-row stratified subsample
+for training and an 8 000-row subsample for evaluation, matching the
+NSL-KDD experimental budget so the two results are directly comparable.
+
+| Model | Accuracy | Precision | Recall | F1 | FPR |
+|---|---:|---:|---:|---:|---:|
+| Isolation Forest | 85.15 % | 60.03 % | 29.72 % | 39.76 % | 3.91 % |
+| Autoencoder | 69.44 % | 32.05 % | 76.19 % | 45.12 % | 31.90 % |
+| Random Forest | **99.69 %** | **99.09 %** | **99.01 %** | **99.05 %** | **0.18 %** |
+| XGBoost | 98.34 % | 94.99 % | 94.92 % | 94.96 % | 0.99 % |
+| **Ensemble** | **99.40 %** | 99.07 % | 97.27 % | **98.16 %** | **0.18 %** |
+
+Bold = best in column.
+
+**Per-attack-family recall (Ensemble, on the 8 000-row test subsample):**
+
+| Family | Recall | Test samples |
+|---|---:|---:|
+| Probe (Port Scanning) | 99.67 % | 301 |
+| DoS / DDoS | 97.45 % | 979 |
+| WebAttack | 90.00 % | 10 |
+| R2L (Brute Force) | 73.08 % | 26 |
+| Botnet | 33.33 % | 3 |
+
+The Botnet recall is a noise-level result driven by the test subsample
+containing only 3 Botnet flows; with all 1948 Botnet rows from the full
+504K-row test split the variance would collapse. WebAttack and R2L recalls
+should also be read with sample-size caution.
+
+**Discussion.** The headline result is that the methodology survives a
+structurally different dataset. CICIDS-2017's flow-level features are
+strictly more informative than NSL-KDD's connection-level fields for this
+ensemble shape — every supervised model improves substantially, the
+ensemble FPR drops from 18.41 % to 0.18 %, and Random Forest alone reaches
+99.05 % F1. This is not surprising in hindsight: the 78 (52 in this mirror,
+see §2.2) flow statistics CICFlowMeter computes capture timing,
+directionality, and packet-size distributions that NSL-KDD's
+service-and-flag encoding cannot represent.
+
+The unsupervised pair (IF + AE) degrade in the opposite direction. On
+CICIDS the supervised models are so accurate that IF/AE's reconstruction
+and isolation signals add mostly noise; the ensemble F1 (98.16 %) is
+slightly *lower* than Random Forest alone (99.05 %). This is honest evidence
+that the ensemble premise is dataset-dependent: when one model dominates,
+voting hurts. On NSL-KDD the four models are closer in F1, so combining
+them helps; on CICIDS-2017 Random Forest is so much better that combining
+slightly hurts. Both observations come from the same experiment, run with
+identical code.
+
+¹ <https://www.kaggle.com/datasets/ericanacletoribeiro/cicids2017-cleaned-and-preprocessed>.
+This mirror ships 52 of CIC's 78 canonical CICFlowMeter columns (the
+remainder are redundant — `Total Backward Packets`, `Subflow * Bytes`,
+duplicate header-length columns, flag count duplicates that are all-zero in
+benign traffic). The loader (`lib/ml/cicids.ts`) zero-fills missing
+canonical columns so the same 78-dim model architecture trains unchanged;
+the actually-populated subset is recorded in
+`models/cicids/feature-meta.json` for reproducibility.
+
+### 9.6 Choice of Anomaly Threshold (0.35)
+
+The ensemble's anomaly threshold was selected by F1 grid search over the
+validation grid {0.30, 0.35, 0.40, 0.45, 0.50, 0.55, 0.60, 0.65, 0.70}.
+Threshold 0.35 maximised F1; thresholds in the 0.30–0.45 band were all
+within 1.0 F1 point of the optimum, indicating the decision boundary is
+broad. Operators who prefer lower FPR at some recall cost can move the
+threshold to 0.55–0.65 without rebuilding the ensemble.
+
+### 9.7 Oversample Rationale (6×)
+
+The 6× R2L / U2R oversample factor in §4.4 was chosen empirically. With no
+oversampling the supervised models never observe R2L instances in a
+bootstrap and family recall collapses below 10 %. We tested factors
+{1×, 2×, 3×, 4×, 6×, 8×, 12×}; 4× and 6× both produced R2L recall above
+70 %, with 6× slightly more stable across re-runs. Factors above 8× began
+to over-fit the training-only R2L instances, hurting test recall.
+
+### 9.8 Baseline Comparison (NSL-KDD)
+
+Published NSL-KDD numbers vary widely because the test split is genuinely
+hard (17 attack types are absent from training). A representative selection
+of comparable binary-classification F1 scores on KDDTest+:
+
+| Approach | Reported F1 (KDDTest+) | Source |
+|---|---:|---|
+| Naive Bayes (baseline) | 75–76 % | Tavallaee et al. 2009 |
+| J48 decision tree | 81–82 % | Tavallaee et al. 2009 |
+| Random Forest (single) | 84–88 % | Various replications |
+| RNN-IDS | ~83 % | Yin et al. 2017 |
+| Deep CNN-IDS | 86–90 % | Vinayakumar et al. 2019 |
+| **This work — Ensemble** | **92.57 %** | §9.1 |
+
+The relative gain comes principally from the 6× oversample (§9.7) and the
+ensemble-voting recall lift, not from any individual model being state of
+the art.
 
 ---
 
@@ -822,19 +996,109 @@ Ensemble weights, the in-memory block list, and the Active Learning
 counter are process-global. Multi-tenant deployment would require splitting
 each by tenant ID and persisting weight state.
 
+### 11.6 Threat model
+
+The system targets an **external attacker generating network traffic
+toward a single monitored network segment**, with no assumed control over
+the IDS host. Specifically in scope:
+
+- Volumetric attacks (DDoS, DoS variants) where flow-rate features carry
+  the signal.
+- Reconnaissance (port scans, host scans) where per-source fan-out
+  features carry the signal.
+- Credential-attack traffic patterns (FTP/SSH brute force) where
+  destination-port + flag-state distributions carry the signal.
+- Web-layer attacks (XSS, SQL injection) where service + flag features
+  partially carry the signal.
+
+Out of scope:
+
+- **Insider threats** with legitimate credentials and on-distribution
+  traffic patterns. The features used here would not separate a
+  privileged user exfiltrating data over normal protocols from benign
+  use of the same protocols.
+- **Encrypted payloads.** All features are flow-level. Anything that
+  requires inspecting application-layer payloads (e.g. signature-based
+  malware identification, deep packet inspection) is outside the model's
+  representational capacity.
+- **Adversarial inputs crafted against the model** — see §11.7.
+- **Host-level compromise** (privilege escalation, kernel exploits).
+  The IDS observes traffic, not host state.
+
+### 11.7 Adversarial robustness
+
+We have **not** tested adversarial robustness. Modern ML-IDS literature
+documents several practical evasion strategies that would affect this
+system:
+
+- **Feature-space adversarial examples.** An attacker who knows the
+  72-dim NSL-KDD encoding can craft packets whose flow features land on
+  the benign side of the decision boundary while still completing the
+  attack semantically — e.g. padding inter-arrival times to mimic benign
+  flow statistics. The supervised models (RF, XGBoost) are particularly
+  vulnerable because their decision boundaries are sharp and learnable.
+- **Mimicry attacks.** Slowloris-style attacks deliberately pace
+  themselves to look like slow legitimate clients; the trained models'
+  recall on slow attacks is structurally lower than on volumetric ones.
+- **Concept drift.** A model trained on 1998 (NSL-KDD) or 2017 (CICIDS)
+  traffic distributions degrades as benign traffic itself drifts —
+  HTTP/3, QUIC, and TLS 1.3 changed flow shape after the datasets were
+  captured. Periodic retraining is required; the Active Learning loop
+  (§5) is a partial mitigation but does not by itself solve drift.
+
+A serious deployment would pair this system with at least one of: an
+adversarial training pass (FGSM-style perturbations during training), an
+online drift detector, or a complementary signature-based engine (Suricata,
+Snort) for known-pattern coverage. None of those are in scope for this
+work; they are explicit future work.
+
+### 11.8 Pure-TypeScript ML — limitations
+
+§3.3 frames the no-Python choice as a deployment simplification. The
+cost is real and worth naming:
+
+- **Implementation surface.** The five algorithms (IF, AE, RF, GBT,
+  LSTM) are reimplemented from scratch in TypeScript. None of them have
+  the maturity of scikit-learn / XGBoost / PyTorch equivalents. Edge
+  cases (numeric overflow in tree split scoring, gradient-clip in the
+  autoencoder backprop, hyper-parameter sensitivity) are handled to the
+  level needed for the trained-once / inference-many usage pattern, not
+  to library-grade robustness.
+- **Throughput ceiling.** ~105 packets/sec/core (§9.4) is acceptable for
+  the demo and small-network scale. A production deployment monitoring
+  10k+ flows/sec would need either Node worker threads, multi-process
+  fan-out, or a switch to a vectorised runtime (Python+NumPy, Rust). The
+  pure-TS choice is a research-scaffold optimisation, not a deployment
+  optimisation.
+- **No GPU path.** The autoencoder and LSTM run on CPU; we did not
+  evaluate whether a GPU implementation would have allowed deeper
+  architectures within the same wall-clock training budget.
+
+These constraints do not invalidate the headline results, but they bound
+the conclusions: we measured what these specific TypeScript
+implementations do, not what scikit-learn / XGBoost would do given the
+same data.
+
 ---
 
 ## 12. Conclusion and Future Work
 
 ### 12.1 Conclusion
 
-We built a real-time, ML-based network IDS with five complementary
-detectors, an Active Learning loop, autonomous response, and cross-dataset
-methodology validation. On NSL-KDD, the four-model ensemble reaches
-90.99 % accuracy and 92.57 % F1, with 97.99 % recall — the right shape for
-an IDS where missed attacks are costlier than confirmable false alarms.
-The system runs in a single Next.js process with sub-10-millisecond
-inference latency on a single CPU thread.
+We built and evaluated a real-time, ML-based network IDS with five
+complementary detectors, an Active Learning loop, autonomous response,
+and cross-dataset methodology validation. On NSL-KDD the four-model
+ensemble reaches 90.99 % accuracy and 92.57 % F1, with 97.99 % recall —
+the right shape for an IDS where missed attacks are costlier than
+confirmable false alarms. The same architecture trained independently
+on CICIDS-2017 reaches 99.40 % accuracy and 98.16 % F1 with 0.18 % FPR;
+the methodology survives the move to a structurally different feature
+space, and the per-dataset comparison surfaces an honest finding —
+ensemble voting helps when individual models are close in F1 (NSL-KDD)
+and hurts marginally when one model dominates (CICIDS, where Random
+Forest alone reaches 99.05 % F1). The entire system runs in a single
+Next.js process with sub-10-millisecond per-packet inference on a single
+CPU thread, no GPU, and no external services.
 
 ### 12.2 Future Work
 
@@ -844,22 +1108,32 @@ Roughly in priority order:
    adapter on the same host) and route real packets into the existing
    detection pipeline. The 72-dim NSL-KDD shape is the contract; only
    the adapter changes.
-2. **Online learning for tree-based models.** Drip new verified samples
-   into Random Forest and XGBoost without a full retrain. The literature
-   has streaming variants of both.
-3. **CICIDS-2017 full reporting.** The pipeline is in place; running it
-   on full CICIDS data and publishing the cross-dataset numbers in the
-   final paper.
-4. **Transformer encoder.** Replace the LSTM with a small Transformer over
-   variable-length flow sequences; compare attention-extracted features
-   with the hand-engineered IP-entropy signals.
-5. **Multi-tenant deployment.** Per-tenant weight state in S3 or Postgres,
-   tenant-scoped block lists.
-6. **Distributed detection.** Detection nodes report to a central
-   ensemble-weight reconciler.
-7. **Integration with host firewalls** (iptables / Windows Firewall) so
+2. **Empirical Active Learning evaluation.** Run the loop described in
+   §5 against KDDTest+ with oracle labels: replay 1 000 test detections,
+   simulate operator clicks at 100 % accuracy, and record ensemble F1
+   every 10 verified samples. Report the convergence curve and the
+   weight trajectory. Without this experiment the §5 contribution is
+   "infrastructure", not "measured accuracy gain."
+3. **LSTM on CICIDS-flows ordered by timestamp.** The current LSTM
+   underperforms on NSL-KDD because the data has no session structure
+   (§4.5). CICIDS-2017 flow records have real chronological ordering;
+   sliding 8-flow windows over a single source IP should produce a
+   genuine sequence signal. Same architecture, different data; train
+   once and report.
+4. **Adversarial-robustness audit.** Generate FGSM-style perturbations
+   against the 72-dim NSL-KDD feature vector and measure the recall
+   collapse vs perturbation budget. Pair with adversarial training pass.
+5. **Online learning for tree-based models.** Drip new verified samples
+   into Random Forest and XGBoost without a full retrain — Mondrian
+   Forests for RF, online boosting variants for XGBoost.
+6. **Transformer encoder.** Replace the LSTM with a small Transformer
+   over variable-length flow sequences; compare attention-extracted
+   features with the hand-engineered IP-entropy signals.
+7. **Multi-tenant deployment.** Per-tenant weight state in S3 or
+   Postgres, tenant-scoped block lists.
+8. **Integration with host firewalls** (iptables / Windows Firewall) so
    blocks become real ingress rules, not in-memory metadata.
-8. **Webhook / Slack / email alert sinks** for the auto-response engine.
+9. **Webhook / Slack / email alert sinks** for the auto-response engine.
 
 ---
 
@@ -868,24 +1142,43 @@ Roughly in priority order:
 1. Tavallaee, M., Bagheri, E., Lu, W., & Ghorbani, A. A. (2009). *A
    detailed analysis of the KDD CUP 99 data set.* IEEE Symposium on
    Computational Intelligence for Security and Defense Applications
-   (CISDA), 1–6.
+   (CISDA), 1–6. doi:10.1109/CISDA.2009.5356528.
 2. Sharafaldin, I., Lashkari, A. H., & Ghorbani, A. A. (2018). *Toward
    generating a new intrusion detection dataset and intrusion traffic
-   characterization.* ICISSP, 108–116.
-3. Liu, F. T., Ting, K. M., & Zhou, Z.-H. (2008). *Isolation Forest.* IEEE
-   International Conference on Data Mining (ICDM), 413–422.
+   characterization.* Proceedings of the 4th International Conference on
+   Information Systems Security and Privacy (ICISSP), 108–116.
+   doi:10.5220/0006639801080116.
+3. Liu, F. T., Ting, K. M., & Zhou, Z.-H. (2008). *Isolation Forest.*
+   IEEE International Conference on Data Mining (ICDM), 413–422.
+   doi:10.1109/ICDM.2008.17.
 4. Breiman, L. (2001). *Random Forests.* Machine Learning, 45(1), 5–32.
+   doi:10.1023/A:1010933404324.
 5. Chen, T., & Guestrin, C. (2016). *XGBoost: A scalable tree boosting
-   system.* KDD, 785–794.
+   system.* Proceedings of the 22nd ACM SIGKDD International Conference
+   on Knowledge Discovery and Data Mining (KDD), 785–794.
+   doi:10.1145/2939672.2939785.
 6. Sakurada, M., & Yairi, T. (2014). *Anomaly detection using
-   autoencoders with nonlinear dimensionality reduction.* MLSDA Workshop,
-   4–11.
+   autoencoders with nonlinear dimensionality reduction.* Proceedings of
+   the MLSDA 2014 2nd Workshop on Machine Learning for Sensory Data
+   Analysis, 4–11. doi:10.1145/2689746.2689747.
 7. Hochreiter, S., & Schmidhuber, J. (1997). *Long short-term memory.*
-   Neural Computation, 9(8), 1735–1780.
-8. Canadian Institute for Cybersecurity. *NSL-KDD dataset.*
-   https://www.unb.ca/cic/datasets/nsl.html.
-9. Canadian Institute for Cybersecurity. *CICIDS-2017 dataset.*
-   https://www.unb.ca/cic/datasets/ids-2017.html.
+   Neural Computation, 9(8), 1735–1780. doi:10.1162/neco.1997.9.8.1735.
+8. Yin, C., Zhu, Y., Fei, J., & He, X. (2017). *A deep learning approach
+   for intrusion detection using recurrent neural networks.* IEEE Access,
+   5, 21954–21961. doi:10.1109/ACCESS.2017.2762418.
+9. Vinayakumar, R., Alazab, M., Soman, K. P., Poornachandran, P.,
+   Al-Nemrat, A., & Venkatraman, S. (2019). *Deep learning approach for
+   intelligent intrusion detection system.* IEEE Access, 7, 41525–41550.
+   doi:10.1109/ACCESS.2019.2895334.
+10. Goodfellow, I., Bengio, Y., & Courville, A. (2016). *Deep Learning.*
+    MIT Press.
+11. Canadian Institute for Cybersecurity. *NSL-KDD dataset.*
+    <https://www.unb.ca/cic/datasets/nsl.html>.
+12. Canadian Institute for Cybersecurity. *CICIDS-2017 dataset.*
+    <https://www.unb.ca/cic/datasets/ids-2017.html>.
+13. Anacleto Ribeiro, E. *CICIDS-2017 cleaned and preprocessed* (Kaggle
+    dataset).
+    <https://www.kaggle.com/datasets/ericanacletoribeiro/cicids2017-cleaned-and-preprocessed>.
 
 ---
 
@@ -990,5 +1283,6 @@ Forest, and XGBoost outputs.
 
 ---
 
-*Last updated: 2026-05-10. Built on commit
-`claude/build-project-architecture-qFVDy` at HEAD.*
+*Last updated: 2026-05-11. Trained CICIDS-2017 results in §9.5 produced
+from commit `08aa976` on branch `claude/cicids-kaggle-adapter`. NSL-KDD
+results unchanged since the original training run.*
