@@ -26,6 +26,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   loadCICIDSCsv,
+  loadCICIDSCsvDetailed,
   fitScaler,
   buildDataset,
   classifyCICIDSLabel,
@@ -148,12 +149,20 @@ async function main() {
   // Sample ~10% of the source train file so we can fit the budget without
   // loading 2 GB into RAM. The downstream stratified subsample then enforces
   // class balance on whatever we collected.
-  const trainRaw = await loadCICIDSCsv(TRAIN_PATH, {
+  const trainDetailed = await loadCICIDSCsvDetailed(TRAIN_PATH, {
     sampleRate: 0.1,
     maxRows: 250000,
     seed: 17,
   });
+  const trainRaw = trainDetailed.rows;
+  const populatedColumns = trainDetailed.populatedColumns;
   console.log(`  Loaded ${trainRaw.length} candidate training rows`);
+  console.log(
+    `  Populated ${populatedColumns.length} / ${CICIDS_FEATURE_LENGTH} canonical features ` +
+      `(missing → zero-filled): ` +
+      `${CICIDS_NUMERIC_COLS.filter(c => !populatedColumns.includes(c)).slice(0, 6).join(', ')}` +
+      (populatedColumns.length < CICIDS_FEATURE_LENGTH - 6 ? ', …' : ''),
+  );
 
   const trainRows = stratifiedSubsample(trainRaw, TRAIN_SAMPLE);
   const scaler = fitScaler(trainRows);
@@ -295,6 +304,8 @@ async function main() {
       dataset: 'CICIDS-2017',
       featureLength: CICIDS_FEATURE_LENGTH,
       numericFeatures: CICIDS_NUMERIC_COLS,
+      populatedColumns,
+      droppedColumns: CICIDS_NUMERIC_COLS.filter(c => !populatedColumns.includes(c)),
       trainedOn: 'CICIDS-2017 (subsampled, stratified by attack family)',
       trainingSamples: trainRows.length,
       testingSamples: testRows.length,
