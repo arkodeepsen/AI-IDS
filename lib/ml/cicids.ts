@@ -159,8 +159,26 @@ function normaliseLabel(raw: string): string {
     .toLowerCase();
 }
 
+/**
+ * Some Kaggle-preprocessed mirrors integer-encode the label column. The
+ * encoding varies between releases, but the de-facto convention is:
+ *   0 → BENIGN, 1..N → attack families in alphabetical order.
+ * Without the original mapping we can only recover the binary signal, so
+ * we treat 0 as normal and everything else as DoS (the modal attack class).
+ * If the user's dataset uses a different integer encoding, they should add
+ * the mapping to ATTACK_FAMILY_MAP below.
+ */
+function classifyNumericLabel(n: number): CICIDSAttackClass {
+  return n === 0 ? 'normal' : 'DoS';
+}
+
 export function classifyCICIDSLabel(rawLabel: string): CICIDSAttackClass {
-  const key = normaliseLabel(rawLabel);
+  const trimmed = rawLabel.trim();
+  // Integer-encoded labels: 0, 1, 2, … (Kaggle preprocessed mirrors).
+  if (/^-?\d+$/.test(trimmed)) {
+    return classifyNumericLabel(Number(trimmed));
+  }
+  const key = normaliseLabel(trimmed);
   const mapped = ATTACK_FAMILY_MAP[key];
   if (mapped) return mapped;
   if (key.startsWith('web attack')) return 'WebAttack';
@@ -184,6 +202,36 @@ export interface CICIDSScaler {
 }
 
 /**
+ * Normalise a column-name for tolerant header lookups.
+ *
+ * CIC's raw release uses titles like "Destination Port" and " Bwd Header
+ * Length" (leading space and all). Kaggle preprocessed mirrors often rename
+ * those to snake_case ("destination_port") or kebab-case ("bwd-header-length")
+ * and may add or drop punctuation. We collapse everything to a lowercase
+ * alphanumeric key so the loader matches regardless of which mirror is used.
+ */
+function normColumn(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, '');
+}
+
+/**
+ * Build a header → column-index lookup keyed by the normalised column name.
+ * Returns the original header indices so downstream parsing keeps using
+ * field positions as before.
+ */
+function buildColumnIndex(header: string[]): Map<string, number> {
+  const m = new Map<string, number>();
+  for (let i = 0; i < header.length; i++) {
+    const key = normColumn(header[i]);
+    if (key && !m.has(key)) m.set(key, i);
+  }
+  return m;
+}
+
+/** Pre-computed canonical keys for the 78 expected columns. */
+const NORMALISED_FEATURE_KEYS = CICIDS_NUMERIC_COLS.map(normColumn);
+
+/**
  * Parse a single CICIDS CSV row using a header→column index mapping.
  * Returns null when the row is malformed (e.g. mid-file header repeats).
  *
@@ -201,8 +249,7 @@ function parseRow(
 
   const values: number[] = new Array(CICIDS_FEATURE_LENGTH);
   for (let i = 0; i < CICIDS_NUMERIC_COLS.length; i++) {
-    const col = CICIDS_NUMERIC_COLS[i];
-    const idx = colIndex.get(col);
+    const idx = colIndex.get(NORMALISED_FEATURE_KEYS[i]);
     if (idx === undefined) return null;
     const raw = (fields[idx] ?? '').trim();
     let v: number;
@@ -269,8 +316,13 @@ export async function loadCICIDSCsv(
       // CIC headers sometimes have a UTF-8 BOM and per-column leading spaces.
       const cleaned = line.replace(/^﻿/, '');
       header = splitCsv(cleaned).map(c => c.trim());
-      colIndex = new Map(header.map((c, i) => [c, i]));
-      labelIdx = header.findIndex(c => c.toLowerCase() === 'label');
+      colIndex = buildColumnIndex(header);
+      // Tolerate "Label", "label", "Class", "attack_label", etc. — any header
+      // cell whose normalised key contains "label" or equals "class" wins.
+      labelIdx = header.findIndex(c => {
+        const k = normColumn(c);
+        return k === 'label' || k === 'class' || k.endsWith('label');
+      });
       if (labelIdx < 0) {
         throw new Error(`No Label column in ${filePath}`);
       }

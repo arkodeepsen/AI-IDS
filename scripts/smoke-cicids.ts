@@ -107,6 +107,33 @@ async function main() {
     'dataset contains WebAttack + DoS families',
   );
 
+  // ----- Kaggle "cleaned and preprocessed" mirror compatibility -----
+  // 1. snake_case headers ("destination_port" instead of "Destination Port")
+  // 2. integer-encoded labels (0 = benign, >0 = attack)
+  const snakeHeader = [
+    ...CICIDS_NUMERIC_COLS.map(c => c.toLowerCase().replace(/[^a-z0-9]+/g, '_')),
+    'label',
+  ].join(',');
+  const snakeRows = [
+    snakeHeader,
+    new Array(CICIDS_FEATURE_LENGTH).fill('0').join(',') + ',0',  // benign (numeric)
+    (() => {
+      const f = new Array(CICIDS_FEATURE_LENGTH).fill('0');
+      f[0] = '22';
+      return f.join(',') + ',1';                                   // attack (numeric)
+    })(),
+    new Array(CICIDS_FEATURE_LENGTH).fill('0').join(',') + ',BENIGN', // mixed string label
+  ].join('\n');
+  const snakePath = path.join(os.tmpdir(), `cicids-smoke-snake-${Date.now()}.csv`);
+  fs.writeFileSync(snakePath, snakeRows);
+  const snake = await loadCICIDSCsv(snakePath);
+  fs.unlinkSync(snakePath);
+
+  assert(snake.length === 3, `snake_case header parsed (got ${snake.length} rows)`);
+  assert(snake[0].binary === 0, 'numeric label "0" → benign');
+  assert(snake[1].binary === 1, 'numeric label "1" → attack');
+  assert(snake[2].binary === 0, 'string "BENIGN" still parsed in a numeric-labelled file');
+
   console.log('\nAll CICIDS smoke checks passed.');
 }
 
