@@ -193,7 +193,7 @@ async function randomSplit() {
  * full 2.8M-row CICIDS-2017 fits comfortably under a few hundred MB.
  */
 async function stratifiedSplit() {
-  const { classifyCICIDSLabel } = await import('../lib/ml/cicids');
+  const { classifyCICIDSLabel, findLabelColumn } = await import('../lib/ml/cicids');
   const files = findCSVFiles();
   console.log(`Files: ${files.map(f => path.basename(f)).join(', ')}`);
 
@@ -216,16 +216,17 @@ async function stratifiedSplit() {
         isFirstLine = false;
         const cleaned = line.replace(/^﻿/, '');
         if (headerLine === null) headerLine = cleaned;
-        // First time we see a header, locate the label column. Tolerate
-        // "Label", "label", " Label", "Class", "attack_label".
+        // First time we see a header, locate the label column. Delegated
+        // to the loader's findLabelColumn so the rules stay in one place.
         if (labelIdx < 0) {
-          const cols = cleaned.split(',').map(c => c.trim().toLowerCase());
-          labelIdx = cols.findIndex(c => c === 'label' || c === 'class' || c.endsWith('label'));
+          const cols = cleaned.split(',').map(c => c.trim());
+          labelIdx = findLabelColumn(cols);
           if (labelIdx < 0) {
             throw new Error(
-              `No Label column in ${path.basename(files[fi])}. Stratified split needs a label column.`,
+              `No label column in ${path.basename(files[fi])}. Stratified split needs a label column.`,
             );
           }
+          console.log(`  Label column: "${cols[labelIdx]}" (index ${labelIdx})`);
         }
         continue;
       }

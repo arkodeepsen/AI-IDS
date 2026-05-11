@@ -125,6 +125,7 @@ export type CICIDSAttackClass =
  * Cross-checked against the CIC release notes and Sharafaldin et al. 2018.
  */
 const ATTACK_FAMILY_MAP: Record<string, CICIDSAttackClass> = {
+  // Canonical CIC labels (raw release)
   benign: 'normal',
   ddos: 'DoS',
   'dos hulk': 'DoS',
@@ -140,6 +141,14 @@ const ATTACK_FAMILY_MAP: Record<string, CICIDSAttackClass> = {
   'web attack sql injection': 'WebAttack',
   bot: 'Botnet',
   infiltration: 'Infiltration',
+  // Kaggle "cleaned and preprocessed" labels — same source data, label
+  // names normalised by the dataset author into a flat, plural taxonomy.
+  'normal traffic': 'normal',
+  dos: 'DoS',
+  'port scanning': 'Probe',
+  'brute force': 'R2L',
+  'web attacks': 'WebAttack',
+  bots: 'Botnet',
 };
 
 /**
@@ -232,6 +241,33 @@ function buildColumnIndex(header: string[]): Map<string, number> {
 const NORMALISED_FEATURE_KEYS = CICIDS_NUMERIC_COLS.map(normColumn);
 
 /**
+ * Locate the label column in a CIC-style header.
+ *
+ * Different mirrors name the label column differently:
+ *   - CIC raw release             →  "Label"
+ *   - Kaggle "cleaned" by Ribeiro →  "Attack Type"
+ *   - HuggingFace mirrors         →  "Label" / "LabelMap"
+ *   - Some research preprocesses  →  "Class" / "category"
+ *
+ * We try, in priority order:
+ *   1. Exact normalised match against a known-good set.
+ *   2. Suffix or substring match against "label" / "class" / "attack".
+ *   3. Fallback to the last column (CIC-format CSVs always put the label
+ *      last, so this is a safe default for unrecognised variants).
+ */
+export function findLabelColumn(header: string[]): number {
+  const knownExact = new Set(['label', 'class', 'attacktype', 'attacklabel', 'category']);
+  for (let i = 0; i < header.length; i++) {
+    if (knownExact.has(normColumn(header[i]))) return i;
+  }
+  for (let i = 0; i < header.length; i++) {
+    const k = normColumn(header[i]);
+    if (k.includes('label') || k.includes('attack') || k === 'class') return i;
+  }
+  return header.length > 0 ? header.length - 1 : -1;
+}
+
+/**
  * Parse a single CICIDS CSV row using a header→column index mapping.
  * Returns null when the row is malformed (e.g. mid-file header repeats).
  *
@@ -239,18 +275,28 @@ const NORMALISED_FEATURE_KEYS = CICIDS_NUMERIC_COLS.map(normColumn);
  *   1. Infinity / NaN values for "Flow Bytes/s" and "Flow Packets/s" when
  *      Flow Duration is 0 — clamped to a large finite value.
  *   2. Some rows have a stray trailing comma; extra fields are ignored.
+ *
+ * Missing canonical columns (common in Kaggle "cleaned and preprocessed"
+ * mirrors that drop redundant features like Subflow Bytes / Fwd Header
+ * Length.1) are zero-filled. The trainer records which columns were
+ * actually populated into feature-meta.json so inference can stay
+ * consistent with training.
  */
 function parseRow(
   fields: string[],
   colIndex: Map<string, number>,
   labelIdx: number,
 ): CICIDSRow | null {
-  if (fields.length < CICIDS_NUMERIC_COLS.length + 1) return null;
+  // Need at least one field beyond the label index to bother parsing.
+  if (fields.length <= labelIdx) return null;
 
   const values: number[] = new Array(CICIDS_FEATURE_LENGTH);
   for (let i = 0; i < CICIDS_NUMERIC_COLS.length; i++) {
     const idx = colIndex.get(NORMALISED_FEATURE_KEYS[i]);
-    if (idx === undefined) return null;
+    if (idx === undefined) {
+      values[i] = 0; // canonical column missing from this file
+      continue;
+    }
     const raw = (fields[idx] ?? '').trim();
     let v: number;
     if (raw === '' || raw === 'NaN' || raw === 'nan') {
@@ -283,20 +329,31 @@ function splitCsv(line: string): string[] {
   return line.split(',');
 }
 
+export interface CICIDSLoadResult {
+  rows: CICIDSRow[];
+  /**
+   * Canonical column names (a subset of CICIDS_NUMERIC_COLS, in the same
+   * order) that were actually present in the input file's header. Lets the
+   * trainer record the trained-on feature subset into feature-meta.json
+   * so inference and re-training stay aligned even when the input mirror
+   * drops columns (e.g. Kaggle preprocessed CSVs ship 52 of the 78).
+   */
+  populatedColumns: string[];
+}
+
 /**
- * Stream a CICIDS CSV file line-by-line, applying an optional row sampler so
- * very large files (the Friday capture is ~250 MB) don't blow the heap.
- *
- * `sampleRate` is a per-row keep probability. Pass 1 to keep everything.
+ * Lower-level loader: returns rows plus the subset of canonical columns
+ * actually populated from the file's header. Use this from training
+ * pipelines that want the feature-meta info.
  */
-export async function loadCICIDSCsv(
+export async function loadCICIDSCsvDetailed(
   filePath: string,
   options: {
     sampleRate?: number;
     maxRows?: number;
     seed?: number;
   } = {},
-): Promise<CICIDSRow[]> {
+): Promise<CICIDSLoadResult> {
   const sampleRate = options.sampleRate ?? 1;
   const maxRows = options.maxRows ?? Number.POSITIVE_INFINITY;
   const rng = mulberry32(options.seed ?? 1337);
@@ -307,6 +364,7 @@ export async function loadCICIDSCsv(
   let header: string[] | null = null;
   let colIndex: Map<string, number> | null = null;
   let labelIdx = -1;
+  let populatedColumns: string[] = [];
   const rows: CICIDSRow[] = [];
 
   for await (const rawLine of rl) {
@@ -317,15 +375,14 @@ export async function loadCICIDSCsv(
       const cleaned = line.replace(/^﻿/, '');
       header = splitCsv(cleaned).map(c => c.trim());
       colIndex = buildColumnIndex(header);
-      // Tolerate "Label", "label", "Class", "attack_label", etc. — any header
-      // cell whose normalised key contains "label" or equals "class" wins.
-      labelIdx = header.findIndex(c => {
-        const k = normColumn(c);
-        return k === 'label' || k === 'class' || k.endsWith('label');
-      });
+      labelIdx = findLabelColumn(header);
       if (labelIdx < 0) {
-        throw new Error(`No Label column in ${filePath}`);
+        throw new Error(`No label column in ${filePath}`);
       }
+      // Snapshot which canonical features the input actually provides.
+      populatedColumns = CICIDS_NUMERIC_COLS.filter((_c, i) =>
+        colIndex!.has(NORMALISED_FEATURE_KEYS[i]),
+      );
       continue;
     }
     if (sampleRate < 1 && rng() > sampleRate) continue;
@@ -334,7 +391,24 @@ export async function loadCICIDSCsv(
     if (rows.length >= maxRows) break;
   }
 
-  return rows;
+  return { rows, populatedColumns };
+}
+
+/**
+ * Convenience wrapper that returns only the rows (the historical shape).
+ * Callers that need the populated-columns metadata should use
+ * {@link loadCICIDSCsvDetailed} instead.
+ */
+export async function loadCICIDSCsv(
+  filePath: string,
+  options: {
+    sampleRate?: number;
+    maxRows?: number;
+    seed?: number;
+  } = {},
+): Promise<CICIDSRow[]> {
+  const result = await loadCICIDSCsvDetailed(filePath, options);
+  return result.rows;
 }
 
 /**

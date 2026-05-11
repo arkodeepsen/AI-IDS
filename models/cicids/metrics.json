@@ -1,0 +1,98 @@
+{
+  "trainedAt": "2026-05-11T19:20:30.701Z",
+  "dataset": "CICIDS-2017",
+  "trainingSamples": 25000,
+  "testingSamples": 8000,
+  "perModel": [
+    {
+      "method": "Isolation Forest",
+      "threshold": 0.5,
+      "accuracy": 0.8515,
+      "precision": 0.6003062787136294,
+      "recall": 0.2971948445792267,
+      "f1Score": 0.39756592292089254,
+      "falsePositiveRate": 0.03906600808262236,
+      "tp": 392,
+      "fp": 261,
+      "tn": 6420,
+      "fn": 927
+    },
+    {
+      "method": "Autoencoder",
+      "threshold": 0.3,
+      "accuracy": 0.694375,
+      "precision": 0.3204719387755102,
+      "recall": 0.7619408642911296,
+      "f1Score": 0.45117845117845123,
+      "falsePositiveRate": 0.3189642269121389,
+      "tp": 1005,
+      "fp": 2131,
+      "tn": 4550,
+      "fn": 314
+    },
+    {
+      "method": "Random Forest",
+      "threshold": 0.3,
+      "accuracy": 0.996875,
+      "precision": 0.9908952959028832,
+      "recall": 0.9901440485216073,
+      "f1Score": 0.9905195297686766,
+      "falsePositiveRate": 0.001796138302649304,
+      "tp": 1306,
+      "fp": 12,
+      "tn": 6669,
+      "fn": 13
+    },
+    {
+      "method": "XGBoost",
+      "threshold": 0.35,
+      "accuracy": 0.983375,
+      "precision": 0.9499241274658573,
+      "recall": 0.9492039423805914,
+      "f1Score": 0.949563898369359,
+      "falsePositiveRate": 0.009878760664571173,
+      "tp": 1252,
+      "fp": 66,
+      "tn": 6615,
+      "fn": 67
+    },
+    {
+      "method": "Ensemble",
+      "threshold": 0.5,
+      "accuracy": 0.994,
+      "precision": 0.9907335907335907,
+      "recall": 0.9727065959059894,
+      "f1Score": 0.981637337413925,
+      "falsePositiveRate": 0.001796138302649304,
+      "tp": 1283,
+      "fp": 12,
+      "tn": 6669,
+      "fn": 36
+    }
+  ],
+  "perFamilyRecall": {
+    "Probe": 0.9966777408637874,
+    "DoS": 0.9744637385086823,
+    "R2L": 0.7307692307692307,
+    "WebAttack": 0.9,
+    "Botnet": 0.3333333333333333
+  },
+  "classDistribution": {
+    "train": {
+      "normal": 20512,
+      "DoS": 3171,
+      "Probe": 923,
+      "R2L": 84,
+      "Botnet": 139,
+      "WebAttack": 171
+    },
+    "test": {
+      "normal": 6681,
+      "Probe": 301,
+      "DoS": 979,
+      "R2L": 26,
+      "WebAttack": 10,
+      "Botnet": 3
+    }
+  }
+}
