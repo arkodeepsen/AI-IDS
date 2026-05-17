@@ -4,6 +4,8 @@
  */
 
 import { DetectionResult, AttackType } from '../types';
+import { iptablesAdapter } from './iptables-adapter';
+import { fireAlertSinks, type AlertSeverity } from './alert-sinks';
 
 export interface BlockedIP {
     id: string;
@@ -166,7 +168,29 @@ class AutoResponseService {
             autoTriggered: options.autoBlocked ?? false
         });
 
+        // Side effects: real firewall rule + outbound alert sinks. Both
+        // are opt-in via env vars and fail-safe (logged, not thrown).
+        const durationSec = duration > 0 ? duration * 60 : 0;
+        void iptablesAdapter.block(ipAddress, durationSec);
+        void fireAlertSinks({
+            detectionId: blocked.id,
+            timestamp: blocked.blockedAt,
+            severity: this.confidenceToSeverity(blocked.confidence),
+            title: `Auto-blocked ${ipAddress}`,
+            message: `${options.reason}${options.attackType ? ` — attack=${options.attackType}` : ''}${expiresAt ? ` — expires ${expiresAt.toISOString()}` : ' (permanent)'}`,
+            sourceIP: ipAddress,
+            attackType: options.attackType,
+            confidence: options.confidence,
+        });
+
         return blocked;
+    }
+
+    private confidenceToSeverity(c: number): AlertSeverity {
+        if (c >= 0.85) return 'critical';
+        if (c >= 0.65) return 'high';
+        if (c >= 0.5) return 'medium';
+        return 'low';
     }
 
     /**
@@ -178,6 +202,7 @@ class AutoResponseService {
         }
 
         this.blockedIPs.delete(ipAddress);
+        void iptablesAdapter.unblock(ipAddress);
 
         this.blockEvents.push({
             id: crypto.randomUUID(),

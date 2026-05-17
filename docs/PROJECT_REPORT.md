@@ -118,6 +118,28 @@ Three observations motivate the design:
   methodology validation.
 - A Manifest V3 Chrome extension that surfaces live anomaly counts as a
   toolbar badge and fires desktop notifications.
+- **Three empirical studies that the project report builds figures from**
+  (§9.8–§9.10, full writeup in `docs/RESEARCH_FINDINGS.md`):
+  1. *Active Learning learning-curve* — oracle-labelled replay over 1 000
+     KDDTest+ rows, measuring ensemble F1 every 10 simulated clicks.
+     Surfaces an honest negative result (per-model reward signal is the
+     wrong objective for ensemble weight rebalancing).
+  2. *Adversarial robustness audit* — score-based L∞ black-box attack
+     against the NSL-KDD-trained ensemble. Measures ~7 % evasion at
+     small budgets and characterises a non-monotonic recovery at larger
+     budgets where features saturate at clip boundaries.
+  3. *Ensemble subset ablation* — every non-empty subset of the four
+     models is grid-search F1-optimised on both NSL-KDD and CICIDS-2017.
+     Headline finding: voting wins when per-model F1 spread is moderate
+     (NSL-KDD, +3.9 pts) and loses when one model dominates
+     (CICIDS-2017, −1.4 pts). Practical implication: serving only the
+     winning subset saves 50–75 % of inference cost.
+- **Operational adapters** that turn database block decisions into real
+  ingress drops (`lib/services/iptables-adapter.ts`), forward
+  high-severity alerts to webhooks / Slack / sendmail
+  (`lib/services/alert-sinks.ts`), and ingest real packets via tcpdump
+  (`lib/services/pcap-adapter.ts`). All three are opt-in via env vars and
+  fail-safe in the demo configuration.
 
 ---
 
@@ -891,7 +913,107 @@ bootstrap and family recall collapses below 10 %. We tested factors
 70 %, with 6× slightly more stable across re-runs. Factors above 8× began
 to over-fit the training-only R2L instances, hurting test recall.
 
-### 9.8 Baseline Comparison (NSL-KDD)
+### 9.8 Empirical Active Learning Evaluation (Finding 1)
+
+**Reproducible with:** `npm run eval:al` ·
+**Figure:** `models/active-learning-curve.png` ·
+**Full writeup:** `docs/RESEARCH_FINDINGS.md` Finding 1.
+
+We simulate 1 000 oracle-labelled operator clicks against the trained
+NSL-KDD ensemble and measure ensemble F1 on a disjoint 5 000-row eval
+pool after every 10 clicks. Two reward variants are evaluated: per-model
+accuracy (the production rule) and per-model F1.
+
+| | Start | After 1 000 clicks (accuracy reward) | After 1 000 clicks (F1 reward) |
+|---|---:|---:|---:|
+| Ensemble F1 | 92.35 % | 90.65 % (−1.69) | 90.61 % (−1.74) |
+| Ensemble FPR | 18.19 % | 17.41 % (−0.78) | 17.54 % (−0.65) |
+| IF weight | 30.0 % | 24.17 % | 24.47 % |
+| XGB weight | 20.0 % | 26.30 % | 26.10 % |
+
+**Honest negative result.** Both reward signals slightly *degrade*
+ensemble F1 (~−1.7 pts after 1 000 clicks). The rule maximises a
+per-model objective; ensemble F1 is a joint objective that depends on
+complementary failure modes. Shifting weight away from the (relatively
+inaccurate) Isolation Forest reduces the IF-driven recall lift the
+ensemble was deliberately tuned to exploit. **The contribution
+remains** — operator feedback infrastructure with audit trail, gentle
+update rule, and reproducible measurement protocol — but the
+performance claim is recalibrated.
+
+A productive follow-up is to substitute an ensemble-level reward (F1
+on a rolling validation buffer) for the per-model reward; the script
+exposes the toggle.
+
+### 9.9 Adversarial Robustness Audit (Finding 2)
+
+**Reproducible with:** `npm run eval:adversarial` ·
+**Figure:** `models/adversarial-audit.png` ·
+**Full writeup:** `docs/RESEARCH_FINDINGS.md` Finding 2.
+
+A score-based L∞ black-box attack (ZOO / SimBA family) targets 2 000
+KDDTest+ attack rows. Per row we rank features by one-step
+coordinate-wise score sensitivity at the original point, then perturb
+the top-5 in the score-reducing direction.
+
+| ε (L∞ budget) | Recall | Successful evasion rate |
+|---:|---:|---:|
+| 0.00 | 98.10 % | 0.00 % |
+| 0.01 | 91.50 % | 6.65 % |
+| 0.02 | 91.05 % | 7.10 % |
+| 0.05 | 93.50 % | 4.65 % |
+| 0.10 | 93.70 % | 4.45 % |
+| 0.20 | 94.60 % | 3.65 % |
+
+**Two findings.** First, at realistic small budgets (ε ≤ 0.02) the
+attack succeeds on ~7 % of attacks — a measured robustness gap that
+closes §11.7's honest disclosure. Second, the response is
+**non-monotonic**: larger ε no longer help the attacker because the
+top-5 features saturate at the [0, 1] clip boundary and the
+score-direction estimated at the original point becomes inaccurate as
+the perturbation moves the sample away. The ensemble's decision
+boundary therefore exhibits robustness *at distance* even when
+brittle *near the original point*.
+
+Adversarial training (one ε = 0.02 augmentation per training attack)
+is a one-script follow-up the report does not yet include — the
+methodology is designed to support it without changes to the model
+code.
+
+### 9.10 Ensemble Subset Ablation (Finding 3)
+
+**Reproducible with:** `npm run eval:ablation` ·
+**Figure:** `models/ablation.png` ·
+**Full writeup:** `docs/RESEARCH_FINDINGS.md` Finding 3.
+
+For every non-empty subset of {IF, AE, RF, XGB} we evaluate F1 with
+equal-weight averaging at each subset's grid-searched optimal
+threshold. Run on both datasets:
+
+| Dataset | Best single F1 | Best subset (and size) | Full 4-way F1 | Δ best-subset vs full |
+|---|---:|---|---:|---:|
+| NSL-KDD | 88.86 % (XGBoost) | **AE + RF** = 93.15 % | 92.75 % | **+0.40 pts** |
+| CICIDS-2017 | 99.48 % (Random Forest) | **RF alone** = 99.48 % | 98.09 % | **+1.39 pts** |
+
+The deck-mandated 4-way ensemble is **provably non-optimal on both
+datasets**: a smaller subset achieves higher F1 in each case.
+
+**Hypothesis (supported by the data).** Voting helps when the
+individual-model F1 spread is moderate (errors are weakly correlated
+and averaging cancels noise) and hurts when one model dominates.
+
+| Dataset | Per-model F1 spread (max − min) | Voting result vs best single |
+|---|---:|---|
+| NSL-KDD | 6.49 pts | **wins** by 3.9 pts |
+| CICIDS-2017 | 57.47 pts | **loses** by 1.4 pts |
+
+**Practical recommendation.** Train all four models, then run a
+one-time subset search on a validation sample, and serve only the
+subset that maximises F1 for the deployed environment. On NSL-KDD that
+saves 50 % of inference cost; on CICIDS-2017 it saves 75 %. This is a
+small change to the trainer and a significant win in production.
+
+### 9.11 Baseline Comparison (NSL-KDD)
 
 Published NSL-KDD numbers vary widely because the test split is genuinely
 hard (17 attack types are absent from training). A representative selection
@@ -1102,38 +1224,45 @@ CPU thread, no GPU, and no external services.
 
 ### 12.2 Future Work
 
-Roughly in priority order:
+Items that have **landed** since the original future-work list (now in
+the code, with measurement or scaffolding as noted):
 
-1. **Live packet capture.** Bind a libpcap-style listener (or a tcpdump
-   adapter on the same host) and route real packets into the existing
-   detection pipeline. The 72-dim NSL-KDD shape is the contract; only
-   the adapter changes.
-2. **Empirical Active Learning evaluation.** Run the loop described in
-   §5 against KDDTest+ with oracle labels: replay 1 000 test detections,
-   simulate operator clicks at 100 % accuracy, and record ensemble F1
-   every 10 verified samples. Report the convergence curve and the
-   weight trajectory. Without this experiment the §5 contribution is
-   "infrastructure", not "measured accuracy gain."
-3. **LSTM on CICIDS-flows ordered by timestamp.** The current LSTM
-   underperforms on NSL-KDD because the data has no session structure
-   (§4.5). CICIDS-2017 flow records have real chronological ordering;
-   sliding 8-flow windows over a single source IP should produce a
-   genuine sequence signal. Same architecture, different data; train
-   once and report.
-4. **Adversarial-robustness audit.** Generate FGSM-style perturbations
-   against the 72-dim NSL-KDD feature vector and measure the recall
-   collapse vs perturbation budget. Pair with adversarial training pass.
-5. **Online learning for tree-based models.** Drip new verified samples
+| Item | Status | Where |
+|---|---|---|
+| Empirical Active Learning evaluation | **Done — measured** | §9.8, `scripts/eval-active-learning.ts` |
+| Adversarial robustness audit | **Done — measured** | §9.9, `scripts/eval-adversarial.ts` |
+| Ensemble subset ablation (new) | **Done — measured** | §9.10, `scripts/eval-ablation.ts` |
+| Live packet capture (libpcap / tcpdump) | **Done — adapter scaffolded** | `lib/services/pcap-adapter.ts` (opt-in via `IDS_ENABLE_PCAP=1`) |
+| Host firewall integration (iptables) | **Done — adapter scaffolded** | `lib/services/iptables-adapter.ts` (opt-in via `IDS_ENABLE_IPTABLES=1`) |
+| Webhook / Slack / email alert sinks | **Done — implemented** | `lib/services/alert-sinks.ts` (opt-in via env vars) |
+| Multi-tenant deployment | **Done — scaffold + design** | `lib/services/tenant.ts` (per-tenant factory pattern) |
+
+Items that remain genuinely future:
+
+1. **Adversarial training pass.** §9.9 audits robustness but doesn't
+   yet retrain with adversarial augmentation. The methodology is
+   designed to support it — one ε = 0.02 perturbed copy per training
+   attack, retrain the ensemble, re-run the audit. Expected: recall at
+   ε = 0.01 recovers from ~91.5 % toward the baseline 98 %.
+2. **Ensemble-level reward signal for Active Learning.** §9.8 found
+   per-model reward signals degrade ensemble F1. Replacing with an
+   ensemble-level reward (F1 on a rolling validation buffer) is a
+   one-script follow-up; the rebalance rule already accepts a generic
+   per-model performance score.
+3. **LSTM on CICIDS-flows ordered by timestamp.** The Kaggle
+   preprocessed mirror drops the Timestamp column, so this requires
+   sourcing the raw CIC release. Same LSTM architecture, just an
+   ordering preprocessor on the input data.
+4. **Online learning for tree-based models.** Drip new verified samples
    into Random Forest and XGBoost without a full retrain — Mondrian
    Forests for RF, online boosting variants for XGBoost.
-6. **Transformer encoder.** Replace the LSTM with a small Transformer
+5. **Transformer encoder.** Replace the LSTM with a small Transformer
    over variable-length flow sequences; compare attention-extracted
    features with the hand-engineered IP-entropy signals.
-7. **Multi-tenant deployment.** Per-tenant weight state in S3 or
-   Postgres, tenant-scoped block lists.
-8. **Integration with host firewalls** (iptables / Windows Firewall) so
-   blocks become real ingress rules, not in-memory metadata.
-9. **Webhook / Slack / email alert sinks** for the auto-response engine.
+6. **Multi-tenant deployment — full migration.** §12.2 above ships the
+   scaffolding (per-tenant factory pattern, header-derived tenant ID).
+   Threading the tenant ID through every route handler and migrating
+   from SQLite to per-tenant Postgres remains future work.
 
 ---
 
