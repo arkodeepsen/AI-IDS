@@ -975,10 +975,29 @@ the perturbation moves the sample away. The ensemble's decision
 boundary therefore exhibits robustness *at distance* even when
 brittle *near the original point*.
 
-Adversarial training (one ε = 0.02 augmentation per training attack)
-is a one-script follow-up the report does not yet include — the
-methodology is designed to support it without changes to the model
-code.
+**Adversarial training pass (Figure 9.9).** We retrained the full
+four-model ensemble after augmenting the training set with one
+ε = 0.02 perturbed copy per attack row (14 842 adversarial copies
+mixed into a 39 842-row augmented training set). The retrained
+ensemble shows decisive recovery:
+
+| ε | Clean ensemble recall | Adv-trained recall | Improvement |
+|---:|---:|---:|---:|
+| 0.00 | 98.45 % | 96.45 % | −2.00 pts (clean cost) |
+| **0.01** | 90.00 % | **95.60 %** | **+5.60 pts** |
+| **0.02** | 89.45 % | **95.25 %** | **+5.80 pts** |
+| 0.05 | 92.35 % | 95.00 % | +2.65 pts |
+| 0.10 | 93.00 % | 94.95 % | +1.95 pts |
+| 0.20 | 94.20 % | 95.15 % | +0.95 pts |
+
+Evasion rate at ε = 0.01 collapses from 8.65 % to **0.90 %** (a 9.6×
+improvement); at ε = 0.02 from 9.20 % to **1.25 %** (7.4×). The cost
+is a ~2-pt drop in clean recall — the classic robustness-accuracy
+trade-off in adversarial ML literature. The adversarially-trained
+ensemble is saved to `models/adversarial/` so it can be A/B tested
+against the clean ensemble at deploy time.
+
+Reproduce with: `npm run train:adversarial`.
 
 ### 9.10 Ensemble Subset Ablation (Finding 3)
 

@@ -1,0 +1,11 @@
+{
+  "trainedAt": "2026-05-18T12:00:31.042Z",
+  "cleanTestMetrics": {
+    "accuracy": 0.908125,
+    "precision": 0.8921728495719528,
+    "recall": 0.9550512764564696,
+    "f1Score": 0.9225418906101803,
+    "falsePositiveRate": 0.15481416447175886
+  },
+  "bestThreshold": 0.35
+}

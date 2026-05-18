@@ -18,6 +18,7 @@
     "train:lstm": "tsx scripts/train-lstm.ts",
     "train:lstm:cicids": "tsx scripts/train-lstm-cicids.ts",
     "train:cicids": "tsx scripts/train-cicids.ts",
+    "train:adversarial": "tsx scripts/train-adversarial.ts",
     "prepare:cicids": "tsx scripts/prepare-cicids.ts",
     "eval:al": "tsx scripts/eval-active-learning.ts",
     "eval:adversarial": "tsx scripts/eval-adversarial.ts",

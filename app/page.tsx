@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Navigation from '@/components/Navigation';
 import StatsCards from '@/components/StatsCards';
 import TrafficChart from '@/components/TrafficChart';
@@ -22,7 +23,17 @@ import {
 import { Shield } from 'lucide-react';
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState('dashboard');
+  // Allow deep-linking via ?tab=<id> so screenshots, bookmarks, and demos
+  // can target a specific panel. The state stays the source of truth so
+  // clicking the navigation bar still works without a router push.
+  const searchParams = useSearchParams();
+  const [activeTab, setActiveTab] = useState(
+    () => searchParams.get('tab') ?? 'dashboard'
+  );
+  useEffect(() => {
+    const t = searchParams.get('tab');
+    if (t) setActiveTab(t);
+  }, [searchParams]);
   // Bumped whenever something changes server-side so children re-fetch.
   const [refreshKey, setRefreshKey] = useState(0);
   const triggerRefresh = useCallback(() => setRefreshKey(k => k + 1), []);
