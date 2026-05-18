@@ -1,0 +1,75 @@
+{
+  "protocol": {
+    "epsilons": [
+      0,
+      0.01,
+      0.02,
+      0.05,
+      0.1,
+      0.2
+    ],
+    "topKFeatures": 5,
+    "probeStep": 0.02,
+    "auditSample": 2000,
+    "ensembleThreshold": 0.35,
+    "attackKind": "L∞ score-based, coordinate-rank (ZOO / SimBA family)",
+    "generatedAt": "2026-05-17T18:44:07.263Z",
+    "dataset": "NSL-KDD (KDDTest+ attack rows)"
+  },
+  "baseline": [
+    {
+      "epsilon": 0,
+      "attackCount": 2000,
+      "predictedAttack": 1962,
+      "recall": 0.981,
+      "meanScoreBefore": 0.6409370576067446,
+      "meanScoreAfter": 0.6409370576067446,
+      "successfulEvasions": 0
+    },
+    {
+      "epsilon": 0.01,
+      "attackCount": 2000,
+      "predictedAttack": 1830,
+      "recall": 0.915,
+      "meanScoreBefore": 0.6409370576067446,
+      "meanScoreAfter": 0.4596909041244782,
+      "successfulEvasions": 133
+    },
+    {
+      "epsilon": 0.02,
+      "attackCount": 2000,
+      "predictedAttack": 1821,
+      "recall": 0.9105,
+      "meanScoreBefore": 0.6409370576067446,
+      "meanScoreAfter": 0.4592976524303137,
+      "successfulEvasions": 142
+    },
+    {
+      "epsilon": 0.05,
+      "attackCount": 2000,
+      "predictedAttack": 1870,
+      "recall": 0.935,
+      "meanScoreBefore": 0.6409370576067446,
+      "meanScoreAfter": 0.461562230502755,
+      "successfulEvasions": 93
+    },
+    {
+      "epsilon": 0.1,
+      "attackCount": 2000,
+      "predictedAttack": 1874,
+      "recall": 0.937,
+      "meanScoreBefore": 0.6409370576067446,
+      "meanScoreAfter": 0.4745151363867079,
+      "successfulEvasions": 89
+    },
+    {
+      "epsilon": 0.2,
+      "attackCount": 2000,
+      "predictedAttack": 1892,
+      "recall": 0.946,
+      "meanScoreBefore": 0.6409370576067446,
+      "meanScoreAfter": 0.48362572347878896,
+      "successfulEvasions": 73
+    }
+  ]
+}

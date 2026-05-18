@@ -115,12 +115,14 @@ stub returns a coherent answer keyed by intent).
 ## 7. Wrap (30 s)
 
 > "To recap: a four-model ensemble — IF + AE + RF + XGBoost — trained on
-> NSL-KDD with stratified oversampling for the rare classes. 91% ensemble
-> accuracy, 98% recall, F1 92.57% on the held-out test set. Real-time
-> packet-to-flow projection, severity-driven autonomous response, and an
-> Active Learning loop that closes the feedback gap. Future work: LSTM
-> sequence modelling, multi-tenant deployment, CICIDS cross-dataset
-> evaluation."
+> NSL-KDD with stratified oversampling, **and independently on
+> CICIDS-2017** for cross-dataset methodology validation. 91 % ensemble
+> accuracy with 98 % recall on NSL-KDD; **99.4 % accuracy with 98 % F1
+> on CICIDS**. Real-time packet-to-flow projection, severity-driven
+> autonomous response, and an Active Learning loop. Three empirical
+> studies in the report — Active Learning convergence, adversarial
+> robustness, and ensemble-subset ablation — plus an adversarially-trained
+> ensemble variant that drops the L∞ evasion rate by 7-10×."
 
 ---
 
@@ -133,10 +135,13 @@ stub returns a coherent answer keyed by intent).
 | Why didn't you use SMOTE? | "We used random oversampling — duplicate R2L and U2R rows 6×. SMOTE would synthesise new samples in feature space, which gives better minority-class generalisation; we didn't ship it because the training pipeline is already getting 91% ensemble accuracy. Easy upgrade." |
 | Why TypeScript instead of Python+sklearn? | "Lets the demo run on any laptop with Node 20+, no Python toolchain, and keeps end-to-end inference under 10 ms. The four algorithms are simple enough to ship in pure TS." |
 | Why SQLite? | "Zero-config single-file DB so the demo runs anywhere. Prisma abstracts the layer — production swaps the URL and adapter for Postgres." |
-| Where's the live packet capture? | "Live capture needs admin + Npcap on Windows. The synthetic generator produces NSL-KDD-shape flow records through the same ensemble. Swap in `pcap-parser` for real PCAP and nothing else changes." |
+| Where's the live packet capture? | "Demo runs against synthetic traffic but the production adapter exists — `lib/services/pcap-adapter.ts` wraps `tcpdump` for unprivileged ingest. Set `IDS_ENABLE_PCAP=1` + `IDS_PCAP_INTERFACE=eth0` and it replaces the synthetic source. No changes downstream of the adapter." |
+| Where are the real firewall blocks? | "`lib/services/iptables-adapter.ts` promotes BlockedIP rows to real Linux DROP rules in a dedicated `IDS-BLOCK` chain. Opt-in via `IDS_ENABLE_IPTABLES=1` plus passwordless sudo for iptables." |
 | Where's the Chrome extension? | "Built in `chrome-extension/` (Manifest V3). Disabled from the demo path — MV3 service workers kill long-lived WebSockets. The dashboard's polling provides equivalent UX." |
 | Where's the Gemini key? | "Optional. Set `GEMINI_API_KEY` in `.env`. Without it the assistant returns deterministic on-topic responses." |
-| What about CICIDS? | "CICIDS-2017 cross-dataset evaluation is in the future scope. The Datasets tab references it for context. NSL-KDD was the primary benchmark because it's the de-facto IDS evaluation set with a stable train/test split." |
+| What about CICIDS? | "**Trained and measured.** The same four-model architecture trained independently on the Kaggle preprocessed mirror of CICIDS-2017. Ensemble F1 98.16 %, FPR 0.18 %. Switch to the Datasets tab — the Cross-Dataset Evaluation card shows the side-by-side comparison. See `docs/RESEARCH.md` for the full methodology + `docs/RESEARCH_FINDINGS.md` Finding 3 for the subset ablation across both datasets." |
+| Does Active Learning actually improve accuracy? | "We measured it. `npm run eval:al` runs an oracle-labelled simulation over 1 000 KDDTest+ rows. Honest finding: the current per-model reward signal **slightly degrades** ensemble F1 because the rule maximises a per-model objective and ensemble F1 is a joint objective. The infrastructure ships intact; the next experiment is an ensemble-level reward signal. Full writeup in `docs/RESEARCH_FINDINGS.md` Finding 1." |
+| Is the ensemble robust to adversarial perturbation? | "Measured. `npm run eval:adversarial` runs a score-based L∞ attack — at ε ≤ 0.02 about 7 % of attacks evade. We then ran `npm run train:adversarial`, which augments training with one perturbed copy per attack row and retrains. The evasion rate drops to ~1 % at the cost of ~2 pts of clean recall. Side-by-side figure: `docs/figures/fig-9-9-adversarial-comparison.png`." |
 
 ---
 

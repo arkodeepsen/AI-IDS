@@ -1,0 +1,205 @@
+{
+  "dataset": "NSL-KDD",
+  "threshold": 0.35,
+  "sampleSize": 8000,
+  "generatedAt": "2026-05-18T13:12:03.861Z",
+  "results": [
+    {
+      "subset": [
+        "Autoencoder",
+        "Random Forest"
+      ],
+      "size": 2,
+      "f1": 0.9314757481940145,
+      "accuracy": 0.917,
+      "precision": 0.8797270955165692,
+      "recall": 0.9896929824561403,
+      "fpr": 0.17936046511627907,
+      "bestThreshold": 0.3
+    },
+    {
+      "subset": [
+        "Isolation Forest",
+        "Autoencoder",
+        "Random Forest"
+      ],
+      "size": 3,
+      "f1": 0.93074620703891,
+      "accuracy": 0.916125,
+      "precision": 0.8791187365958276,
+      "recall": 0.9888157894736842,
+      "fpr": 0.18023255813953487,
+      "bestThreshold": 0.35
+    },
+    {
+      "subset": [
+        "Isolation Forest",
+        "Autoencoder",
+        "XGBoost"
+      ],
+      "size": 3,
+      "f1": 0.9282839748219999,
+      "accuracy": 0.913125,
+      "precision": 0.8766322354316898,
+      "recall": 0.9864035087719298,
+      "fpr": 0.18401162790697675,
+      "bestThreshold": 0.4
+    },
+    {
+      "subset": [
+        "Autoencoder",
+        "XGBoost"
+      ],
+      "size": 2,
+      "f1": 0.9281275890637946,
+      "accuracy": 0.91325,
+      "precision": 0.8793171114599686,
+      "recall": 0.9826754385964912,
+      "fpr": 0.17877906976744187,
+      "bestThreshold": 0.4
+    },
+    {
+      "subset": [
+        "Isolation Forest",
+        "Autoencoder",
+        "Random Forest",
+        "XGBoost"
+      ],
+      "size": 4,
+      "f1": 0.9275272802141239,
+      "accuracy": 0.912,
+      "precision": 0.8740783857198292,
+      "recall": 0.9879385964912281,
+      "fpr": 0.18866279069767442,
+      "bestThreshold": 0.3
+    },
+    {
+      "subset": [
+        "Autoencoder",
+        "Random Forest",
+        "XGBoost"
+      ],
+      "size": 3,
+      "f1": 0.927351306853262,
+      "accuracy": 0.91175,
+      "precision": 0.8735944164404809,
+      "recall": 0.9881578947368421,
+      "fpr": 0.18953488372093022,
+      "bestThreshold": 0.25
+    },
+    {
+      "subset": [
+        "Isolation Forest",
+        "Random Forest",
+        "XGBoost"
+      ],
+      "size": 3,
+      "f1": 0.9207286048641498,
+      "accuracy": 0.902625,
+      "precision": 0.8589329789253844,
+      "recall": 0.9921052631578947,
+      "fpr": 0.21598837209302327,
+      "bestThreshold": 0.2
+    },
+    {
+      "subset": [
+        "Isolation Forest",
+        "Random Forest"
+      ],
+      "size": 2,
+      "f1": 0.9114662060030232,
+      "accuracy": 0.8975,
+      "precision": 0.8977031050616758,
+      "recall": 0.9256578947368421,
+      "fpr": 0.13982558139534884,
+      "bestThreshold": 0.25
+    },
+    {
+      "subset": [
+        "Isolation Forest",
+        "XGBoost"
+      ],
+      "size": 2,
+      "f1": 0.891141378946257,
+      "accuracy": 0.871125,
+      "precision": 0.8592954591732844,
+      "recall": 0.9254385964912281,
+      "fpr": 0.20087209302325582,
+      "bestThreshold": 0.3
+    },
+    {
+      "subset": [
+        "XGBoost"
+      ],
+      "size": 1,
+      "f1": 0.8885769812135609,
+      "accuracy": 0.871,
+      "precision": 0.8751595065929392,
+      "recall": 0.9024122807017544,
+      "fpr": 0.17063953488372094,
+      "bestThreshold": 0.2
+    },
+    {
+      "subset": [
+        "Random Forest",
+        "XGBoost"
+      ],
+      "size": 2,
+      "f1": 0.8876860622462787,
+      "accuracy": 0.8755,
+      "precision": 0.9136490250696379,
+      "recall": 0.8631578947368421,
+      "fpr": 0.10813953488372093,
+      "bestThreshold": 0.25
+    },
+    {
+      "subset": [
+        "Random Forest"
+      ],
+      "size": 1,
+      "f1": 0.8770840519719444,
+      "accuracy": 0.866375,
+      "precision": 0.9219240995890742,
+      "recall": 0.8364035087719298,
+      "fpr": 0.0938953488372093,
+      "bestThreshold": 0.2
+    },
+    {
+      "subset": [
+        "Isolation Forest"
+      ],
+      "size": 1,
+      "f1": 0.8360603144048764,
+      "accuracy": 0.808375,
+      "precision": 0.8159048215403882,
+      "recall": 0.8572368421052632,
+      "fpr": 0.2563953488372093,
+      "bestThreshold": 0.45
+    },
+    {
+      "subset": [
+        "Isolation Forest",
+        "Autoencoder"
+      ],
+      "size": 2,
+      "f1": 0.8315713845838036,
+      "accuracy": 0.794875,
+      "precision": 0.7815936716187536,
+      "recall": 0.8883771929824561,
+      "fpr": 0.32906976744186045,
+      "bestThreshold": 0.35
+    },
+    {
+      "subset": [
+        "Autoencoder"
+      ],
+      "size": 1,
+      "f1": 0.8236950618525597,
+      "accuracy": 0.780875,
+      "precision": 0.7607282184655396,
+      "recall": 0.8980263157894737,
+      "fpr": 0.3744186046511628,
+      "bestThreshold": 0.2
+    }
+  ]
+}

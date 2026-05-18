@@ -1,0 +1,106 @@
+{
+  "protocol": {
+    "generatedAt": "2026-05-18T12:00:31.042Z",
+    "perturbationBudget": 0.02,
+    "topKFeatures": 5,
+    "probeStep": 0.02,
+    "auditSample": 2000,
+    "epsilons": [
+      0,
+      0.01,
+      0.02,
+      0.05,
+      0.1,
+      0.2
+    ],
+    "ensembleThreshold": 0.35
+  },
+  "cleanEnsemble": {
+    "audit": [
+      {
+        "epsilon": 0,
+        "recall": 0.9845,
+        "evasionRate": 0,
+        "meanScoreAfter": 0.643832111718223
+      },
+      {
+        "epsilon": 0.01,
+        "recall": 0.9,
+        "evasionRate": 0.0865,
+        "meanScoreAfter": 0.4565847524735848
+      },
+      {
+        "epsilon": 0.02,
+        "recall": 0.8945,
+        "evasionRate": 0.092,
+        "meanScoreAfter": 0.4560421793871444
+      },
+      {
+        "epsilon": 0.05,
+        "recall": 0.9235,
+        "evasionRate": 0.0625,
+        "meanScoreAfter": 0.45870678159650397
+      },
+      {
+        "epsilon": 0.1,
+        "recall": 0.93,
+        "evasionRate": 0.057,
+        "meanScoreAfter": 0.4720130768409752
+      },
+      {
+        "epsilon": 0.2,
+        "recall": 0.942,
+        "evasionRate": 0.0455,
+        "meanScoreAfter": 0.48200599159602303
+      }
+    ]
+  },
+  "adversarialEnsemble": {
+    "audit": [
+      {
+        "epsilon": 0,
+        "recall": 0.9645,
+        "evasionRate": 0,
+        "meanScoreAfter": 0.6355579197886878
+      },
+      {
+        "epsilon": 0.01,
+        "recall": 0.956,
+        "evasionRate": 0.009,
+        "meanScoreAfter": 0.6111448247181236
+      },
+      {
+        "epsilon": 0.02,
+        "recall": 0.9525,
+        "evasionRate": 0.0125,
+        "meanScoreAfter": 0.6095218196185175
+      },
+      {
+        "epsilon": 0.05,
+        "recall": 0.95,
+        "evasionRate": 0.015,
+        "meanScoreAfter": 0.6029576798345035
+      },
+      {
+        "epsilon": 0.1,
+        "recall": 0.9495,
+        "evasionRate": 0.0155,
+        "meanScoreAfter": 0.6021230431816075
+      },
+      {
+        "epsilon": 0.2,
+        "recall": 0.9515,
+        "evasionRate": 0.0135,
+        "meanScoreAfter": 0.6078999793236384
+      }
+    ],
+    "cleanTestMetrics": {
+      "accuracy": 0.908125,
+      "precision": 0.8921728495719528,
+      "recall": 0.9550512764564696,
+      "f1Score": 0.9225418906101803,
+      "falsePositiveRate": 0.15481416447175886
+    },
+    "bestThreshold": 0.35
+  }
+}

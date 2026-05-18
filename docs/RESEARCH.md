@@ -92,58 +92,57 @@ Headline numbers (25 000 stratified train / 8 000 test):
 
 ## Reproduction — CICIDS-2017 half
 
-### 1. Acquire the data (one-time, ~1.1 GB)
+### 1. Acquire the data (one-time)
 
-CIC distributes CICIDS-2017 from
-[unb.ca/cic/datasets/ids-2017.html](https://www.unb.ca/cic/datasets/ids-2017.html).
-Fill in the academic-use form, then download the eight per-day CSVs.
+Three options, in order of convenience:
 
-Alternative: the HuggingFace mirror
-[`lacg030175/CICIDS2017`](https://huggingface.co/datasets/lacg030175/CICIDS2017)
-provides the same data as parquet (~340 MB), which can be converted with:
+**Kaggle preprocessed mirror (685 MB, single CSV)** — used by the headline
+CICIDS results in `models/cicids/metrics.json`:
 
 ```python
-import pandas as pd
-for split in ['train', 'test']:
-    df = pd.read_parquet(f'data/cicids/{split}.parquet')
-    df.to_csv(f'data/cicids/{split}.csv', index=False)
+import kagglehub
+path = kagglehub.dataset_download(
+    "ericanacletoribeiro/cicids2017-cleaned-and-preprocessed"
+)
+# move the cicids2017_cleaned.csv from <path> into data/cicids/raw/
 ```
 
-…in which case skip the prepare step (the HF parquet ships with the split
-already applied).
+Needs a Kaggle API token (`~/.kaggle/kaggle.json` or
+`KAGGLE_USERNAME` / `KAGGLE_KEY` env vars).
 
-### 2. Stage the raw CSVs
-
-Place them in `data/cicids/raw/` with their original CIC names:
-
-```
-data/cicids/raw/
-  Monday-WorkingHours.pcap_ISCX.csv
-  Tuesday-WorkingHours.pcap_ISCX.csv
-  Wednesday-workingHours.pcap_ISCX.csv
-  Thursday-WorkingHours-Morning-WebAttacks.pcap_ISCX.csv
-  Thursday-WorkingHours-Afternoon-Infilteration.pcap_ISCX.csv
-  Friday-WorkingHours-Morning.pcap_ISCX.csv
-  Friday-WorkingHours-Afternoon-PortScan.pcap_ISCX.csv
-  Friday-WorkingHours-Afternoon-DDos.pcap_ISCX.csv
-```
-
-### 3. Split into train + test
-
-Two options:
+**HuggingFace mirror (Apache-2.0, no token)** — `scripts/download-cicids.py`
+pulls the 4-shard parquet from `sonnh-tech1/cic-ids-2017` and converts to
+the expected CSV layout:
 
 ```bash
-# Temporal split (recommended) — train Mon-Thu, test Fri.
-# Friday introduces PortScan, Botnet, and DDoS attacks the model has
-# literally never seen — the harder, more honest evaluation.
-npx tsx scripts/prepare-cicids.ts --temporal
-
-# Random split — 80/20 across all eight days. Easier, doesn't test
-# generalisation to unseen attack types.
-npx tsx scripts/prepare-cicids.ts --random
+pip install pyarrow huggingface_hub
+python3 scripts/download-cicids.py
 ```
 
-Both write `data/cicids/train.csv` and `data/cicids/test.csv`.
+**Official CIC release (raw, ~1.1 GB)** — fill in the academic-use form at
+<https://www.unb.ca/cic/datasets/ids-2017.html>. Extract the eight per-day
+CSVs into `data/cicids/raw/`. The loader handles the C1 control-byte
+artefact in `Web Attack` labels and the `Flow Bytes/s` infinities.
+
+### 2. Split into train + test
+
+The `prepare:cicids` script auto-detects the input layout and picks the
+right strategy:
+
+```bash
+npm run prepare:cicids       # auto-detect (default)
+# or force a specific mode:
+npx tsx scripts/prepare-cicids.ts --temporal     # Mon-Thu vs Fri (needs day-prefixed files)
+npx tsx scripts/prepare-cicids.ts --random       # 80/20 IID
+npx tsx scripts/prepare-cicids.ts --stratified   # 80/20 stratified per label (recommended for the Kaggle single-CSV)
+```
+
+For the Kaggle preprocessed mirror, `--stratified` is the right pick
+because the file is a single combined CSV with no per-day prefix; the
+script samples 80/20 per attack family to ensure rare classes appear in
+both splits.
+
+All modes write `data/cicids/train.csv` and `data/cicids/test.csv`.
 
 ### 4. Train the ensemble
 
@@ -167,6 +166,27 @@ Outputs land in `models/cicids/`:
 Open the dashboard → **Datasets** tab. The "Cross-Dataset Evaluation" card
 shows the NSL-KDD numbers, the CICIDS-2017 numbers, the per-family CICIDS
 recall, and the gap in ensemble F1 across the two datasets.
+
+### CICIDS-2017 headline numbers (Kaggle preprocessed, `models/cicids/metrics.json`)
+
+| Model | Accuracy | F1 | FPR |
+|---|---:|---:|---:|
+| Isolation Forest | 85.15 % | 39.76 % | 3.91 % |
+| Autoencoder | 69.44 % | 45.12 % | 31.90 % |
+| **Random Forest** | **99.69 %** | **99.05 %** | **0.18 %** |
+| XGBoost | 98.34 % | 94.96 % | 0.99 % |
+| **Ensemble** | **99.40 %** | **98.16 %** | **0.18 %** |
+
+Per-attack-family recall (ensemble): Probe 99.7 %, DoS 97.4 %,
+WebAttack 90.0 %, R2L 73.1 %, Botnet 33.3 % (3 test samples — sample
+noise).
+
+Honest finding: on CICIDS-2017 the ensemble F1 (98.16 %) is **slightly
+below** Random Forest alone (99.05 %). The unsupervised pair injects
+noise the dominant supervised model has to fight through. The same
+methodology that lifts ensemble F1 +3.9 pts on NSL-KDD costs −1.4 pts
+on CICIDS. See `docs/RESEARCH_FINDINGS.md` Finding 3 for the full subset
+ablation that quantifies this.
 
 ---
 

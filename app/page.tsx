@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Navigation from '@/components/Navigation';
 import StatsCards from '@/components/StatsCards';
 import TrafficChart from '@/components/TrafficChart';
@@ -21,7 +22,24 @@ import {
 } from '@/components/controls';
 import { Shield } from 'lucide-react';
 
+/**
+ * Tiny reader component that consumes the URL query param and pushes it
+ * into the parent's tab state. Wrapped in <Suspense> at the page root so
+ * Next.js' static export prerender doesn't bail on useSearchParams().
+ */
+function TabFromUrl({ onChange }: { onChange: (id: string) => void }) {
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    const t = searchParams.get('tab');
+    if (t) onChange(t);
+  }, [searchParams, onChange]);
+  return null;
+}
+
 export default function Home() {
+  // The default tab is computed without touching searchParams so prerender
+  // succeeds. TabFromUrl below overrides on mount with whatever ?tab=
+  // value the operator landed on.
   const [activeTab, setActiveTab] = useState('dashboard');
   // Bumped whenever something changes server-side so children re-fetch.
   const [refreshKey, setRefreshKey] = useState(0);
@@ -29,6 +47,9 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-zinc-950">
+      <Suspense fallback={null}>
+        <TabFromUrl onChange={setActiveTab} />
+      </Suspense>
       <Navigation activeTab={activeTab} onTabChange={setActiveTab} />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
