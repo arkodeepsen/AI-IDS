@@ -1,27 +1,38 @@
 # Architecture
 
+For the rendered version of this diagram see
+`docs/figures/fig-3-1-system-architecture.png` (built by
+`scripts/generate-report-figures.py`).
+
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
 │  Browser — Next.js 16 (port 3000)                                    │
 │  Dashboard · Detections · ML Models · Auto-Response · Training       │
-│  Datasets · Alerts · AI Assistant                                    │
+│  Datasets · Alerts · AI Assistant     (deep-link via ?tab=<id>)      │
 └──────────────────────────────────────┬───────────────────────────────┘
-                                       │ fetch() + Recharts
+                                       │ fetch() · EventSource · Recharts
                                        ▼
 ┌──────────────────────────────────────────────────────────────────────┐
 │  Next.js API Route Handlers (server-side TypeScript)                 │
-│  /api/{stats,detections,detect,attack,seed,blocked-ips,             │
-│        rlhf,training,metrics,alerts,auto-response,analyze}           │
+│  /api/{stats,detections,detect,attack,seed,blocked-ips,events,       │
+│        rlhf,training,metrics,alerts,auto-response,analyze,lstm}      │
 │         │                                                            │
 │         ▼                                                            │
 │  ┌────────────────────────────────────────────────────────────────┐  │
 │  │ Services (singleton, in-memory)                                │  │
 │  │   detection ── ensemble.predict() ── auto-response             │  │
 │  │       │                                       │                │  │
+│  │       │                                       ├──▶ iptables    │  │
+│  │       │                                       │   adapter      │  │
+│  │       │                                       ├──▶ alert       │  │
+│  │       │                                       │   sinks        │  │
 │  │       └─ persist ─▶ Prisma ─▶ SQLite          ▼                │  │
-│  │                                            blockedIPs          │  │
+│  │                                            BlockedIP           │  │
 │  │   rlhf       — feedback → reweight ensemble                    │  │
 │  │   auto-train — accumulate verified samples → retrain trigger   │  │
+│  │   sse-broadcaster — shared poller, fans out to all clients     │  │
+│  │   pcap-adapter    — tcpdump → CapturedPacket                   │  │
+│  │   tenant          — per-tenant factory pattern (scaffold)      │  │
 │  └────────────────────────────────────────────────────────────────┘  │
 │                             │                                        │
 │                             ▼                                        │
@@ -29,10 +40,13 @@
 │  │ ML layer (pure TypeScript)                                     │  │
 │  │   IsolationForest (30%)  Autoencoder (25%)                     │  │
 │  │   RandomForest    (25%)  XGBoost     (20%)  → Ensemble         │  │
+│  │                            + LSTM (sequence, separate API)     │  │
 │  │   ▲                                                            │  │
-│  │   │ deserialise()                                              │  │
+│  │   │ deserialise() at startup                                   │  │
 │  │   │                                                            │  │
-│  │ models/ensemble.json (trained on NSL-KDD KDDTrain+)            │  │
+│  │ models/ensemble.json           — NSL-KDD-trained               │  │
+│  │ models/cicids/ensemble.json    — CICIDS-2017-trained           │  │
+│  │ models/adversarial/ensemble.json — adversarially-augmented     │  │
 │  └────────────────────────────────────────────────────────────────┘  │
 └──────────────────────────────────────────────────────────────────────┘
 ```
@@ -135,12 +149,24 @@ weights through `getDetector().updateWeights(...)`.
 |---|---|---|
 | "Manifest V3 Chrome extension WebSocket client" | MV3 service workers kill idle WebSockets. | Extension rewritten to use `chrome.alarms` + the dashboard's HTTP endpoints. Toolbar badge + desktop notifications work; SSE on the dashboard provides the same "push" UX in-browser. |
 | "WebSocket-powered alert notifications" | Native Next.js WebSockets in 16 are still rough. | Replaced with Server-Sent Events at `/api/events`. Real push, plain HTTP, no special server. The dashboard's `<LiveToasts/>` consumes the stream. |
-| "Python/libpcap backend" | Needs admin + Npcap on Windows. | Synthetic generator replays packets through the same ensemble. Architecture is identical from the detector down. |
+| "Python/libpcap backend" | Demo runs unprivileged. | Synthetic generator replays packets through the same ensemble; **a real `tcpdump`-driven adapter** (`lib/services/pcap-adapter.ts`, opt-in via `IDS_ENABLE_PCAP=1`) ingests live traffic when capabilities allow. |
 | "Autoencoder Neural Network" | Implies Keras/TF. | Pure-TS encoder-decoder with sigmoid output. Trained on the same 72-dim NSL-KDD vectors. |
 | "LSTM and Transformer models for sequential analysis" | Listed as future scope. | LSTM is **implemented** (`lib/ml/lstm.ts`) and trained on sliding 8-flow NSL-KDD windows (`models/lstm.json`). Transformer remains future scope. |
 | "IP Address Entropy Scores" | Not part of NSL-KDD's column set. | Computed at runtime in `lib/ml/ip-entropy.ts` (octet-byte Shannon entropy + rolling per-source fan-out entropy) and persisted on every detection row. |
-| "Iptables/Windows Firewall integration" | Touching the host firewall during a demo is unsafe. | Replaced with a `BlockedIP` SQLite table that mirrors the same effect. |
-| "Tested on CICIDS benchmark datasets" | We trained and evaluated on **NSL-KDD**, not CICIDS. | The Datasets tab still references CICIDS for context but the live metrics are NSL-KDD. CICIDS evaluation remains future scope. |
+| "Iptables/Windows Firewall integration" | Touching the host firewall during a demo is unsafe. | DB `BlockedIP` table is authoritative; **opt-in `iptables-adapter.ts`** promotes rows to real Linux `IDS-BLOCK` chain DROP rules when `IDS_ENABLE_IPTABLES=1`. |
+| "Tested on CICIDS benchmark datasets" | Originally listed as future scope. | **Done.** The four-model ensemble is trained independently on CICIDS-2017 (Kaggle preprocessed mirror, `models/cicids/`). Cross-dataset F1: 98.16 %. See `docs/RESEARCH.md` and `docs/PROJECT_REPORT.md` §9.5. |
+
+## Optional operational adapters (since the original deck)
+
+| File | Behaviour | Activation |
+|---|---|---|
+| `lib/services/iptables-adapter.ts` | Promotes `BlockedIP` rows to real Linux DROP rules in the `IDS-BLOCK` chain | `IDS_ENABLE_IPTABLES=1` + passwordless sudo for `iptables` |
+| `lib/services/pcap-adapter.ts` | Wraps `tcpdump -q -tttt -n` for unprivileged live capture; parses output to `CapturedPacket` | `IDS_ENABLE_PCAP=1` + `IDS_PCAP_INTERFACE=eth0` |
+| `lib/services/alert-sinks.ts` | Fires high-severity alerts to a generic webhook, Slack incoming-webhook, and/or sendmail | Any of `ALERT_WEBHOOK_URL`, `ALERT_SLACK_WEBHOOK_URL`, `ALERT_EMAIL_TO` |
+| `lib/services/tenant.ts` | Per-tenant factory pattern (request → `getTenantId(req)` → scoped singleton) | Set `x-tenant-id: <id>` header; defaults to `default` |
+
+All four fail-safe (errors are logged, never thrown), so leaving them
+unset just no-ops that channel.
 
 ## Trade-offs
 

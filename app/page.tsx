@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Navigation from '@/components/Navigation';
 import StatsCards from '@/components/StatsCards';
@@ -22,24 +22,34 @@ import {
 } from '@/components/controls';
 import { Shield } from 'lucide-react';
 
-export default function Home() {
-  // Allow deep-linking via ?tab=<id> so screenshots, bookmarks, and demos
-  // can target a specific panel. The state stays the source of truth so
-  // clicking the navigation bar still works without a router push.
+/**
+ * Tiny reader component that consumes the URL query param and pushes it
+ * into the parent's tab state. Wrapped in <Suspense> at the page root so
+ * Next.js' static export prerender doesn't bail on useSearchParams().
+ */
+function TabFromUrl({ onChange }: { onChange: (id: string) => void }) {
   const searchParams = useSearchParams();
-  const [activeTab, setActiveTab] = useState(
-    () => searchParams.get('tab') ?? 'dashboard'
-  );
   useEffect(() => {
     const t = searchParams.get('tab');
-    if (t) setActiveTab(t);
-  }, [searchParams]);
+    if (t) onChange(t);
+  }, [searchParams, onChange]);
+  return null;
+}
+
+export default function Home() {
+  // The default tab is computed without touching searchParams so prerender
+  // succeeds. TabFromUrl below overrides on mount with whatever ?tab=
+  // value the operator landed on.
+  const [activeTab, setActiveTab] = useState('dashboard');
   // Bumped whenever something changes server-side so children re-fetch.
   const [refreshKey, setRefreshKey] = useState(0);
   const triggerRefresh = useCallback(() => setRefreshKey(k => k + 1), []);
 
   return (
     <div className="min-h-screen bg-zinc-950">
+      <Suspense fallback={null}>
+        <TabFromUrl onChange={setActiveTab} />
+      </Suspense>
       <Navigation activeTab={activeTab} onTabChange={setActiveTab} />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
