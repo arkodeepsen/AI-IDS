@@ -98,7 +98,14 @@ export function generatePacketBatch(count: number): NetworkPacket[] {
 // the corresponding attack class.
 // =========================================================================
 
-export type SyntheticAttackKind = 'ddos' | 'portscan' | 'bruteforce';
+export type SyntheticAttackKind =
+  | 'ddos'
+  | 'portscan'
+  | 'bruteforce'
+  | 'webattack'
+  | 'sqlinjection'
+  | 'botnet'
+  | 'infiltration';
 
 export function generateSyntheticAttack(
   kind: SyntheticAttackKind,
@@ -111,6 +118,14 @@ export function generateSyntheticAttack(
       return generatePortScanBatch(count);
     case 'bruteforce':
       return generateBruteForceBatch(count);
+    case 'webattack':
+      return generateWebAttackBatch(count);
+    case 'sqlinjection':
+      return generateSqlInjectionBatch(count);
+    case 'botnet':
+      return generateBotnetBatch(count);
+    case 'infiltration':
+      return generateInfiltrationBatch(count);
   }
 }
 
@@ -240,6 +255,204 @@ function generateBruteForceBatch(count: number): NetworkPacket[] {
   });
 }
 
+/**
+ * Web Attack — XSS / injection-style malicious HTTP: oversized request
+ * payloads, guest-login probing and a high rejected-request rate against a
+ * web port (the rerror signature the ensemble flags hard).
+ */
+function generateWebAttackBatch(count: number): NetworkPacket[] {
+  const source = publicIP();
+  const target = privateIP();
+  return Array.from({ length: count }, () => {
+    const err = 0.7 + Math.random() * 0.3;
+    const kdd: KddOverride = {
+      duration: Math.floor(Math.random() * 4),
+      src_bytes: 4000 + Math.floor(Math.random() * 8000),
+      dst_bytes: 120 + Math.floor(Math.random() * 200),
+      flag: 'SF',
+      logged_in: 1,
+      hot: 18 + Math.floor(Math.random() * 14),
+      num_compromised: 2 + Math.floor(Math.random() * 5),
+      num_access_files: 2 + Math.floor(Math.random() * 4),
+      num_failed_logins: 4 + Math.floor(Math.random() * 6),
+      is_guest_login: 1,
+      count: 150 + Math.floor(Math.random() * 150),
+      srv_count: 150 + Math.floor(Math.random() * 150),
+      rerror_rate: err,
+      srv_rerror_rate: err,
+      same_srv_rate: 1,
+      diff_srv_rate: 0,
+      dst_host_count: 255,
+      dst_host_srv_count: 255,
+      dst_host_same_srv_rate: 1,
+      dst_host_rerror_rate: err,
+      dst_host_srv_rerror_rate: err,
+      label: 'phf',
+    };
+    return {
+      id: crypto.randomUUID(),
+      timestamp: new Date(),
+      sourceIP: source,
+      destIP: target,
+      sourcePort: Math.floor(Math.random() * 60000) + 1024,
+      destPort: pick([80, 443, 8080]),
+      protocol: 'HTTP',
+      packetSize: 1400 + Math.floor(Math.random() * 200),
+      flags: 'PSH,ACK',
+      kddOverride: kdd,
+      attackLabel: 'Web Attack',
+    };
+  });
+}
+
+/** SQL Injection — oversized database-payload requests against a web port. */
+function generateSqlInjectionBatch(count: number): NetworkPacket[] {
+  const source = publicIP();
+  const target = privateIP();
+  return Array.from({ length: count }, () => {
+    const err = 0.6 + Math.random() * 0.4;
+    const kdd: KddOverride = {
+      duration: Math.floor(Math.random() * 4),
+      src_bytes: 6000 + Math.floor(Math.random() * 10000),
+      dst_bytes: 100 + Math.floor(Math.random() * 200),
+      flag: 'SF',
+      logged_in: 1,
+      hot: 20 + Math.floor(Math.random() * 14),
+      num_compromised: 3 + Math.floor(Math.random() * 5),
+      num_file_creations: 1 + Math.floor(Math.random() * 3),
+      num_access_files: 2 + Math.floor(Math.random() * 4),
+      num_failed_logins: 4 + Math.floor(Math.random() * 6),
+      is_guest_login: 1,
+      count: 130 + Math.floor(Math.random() * 130),
+      srv_count: 130 + Math.floor(Math.random() * 130),
+      rerror_rate: err,
+      srv_rerror_rate: err,
+      same_srv_rate: 1,
+      diff_srv_rate: 0,
+      dst_host_count: 255,
+      dst_host_srv_count: 255,
+      dst_host_same_srv_rate: 1,
+      dst_host_rerror_rate: err,
+      dst_host_srv_rerror_rate: err,
+      label: 'phf',
+    };
+    return {
+      id: crypto.randomUUID(),
+      timestamp: new Date(),
+      sourceIP: source,
+      destIP: target,
+      sourcePort: Math.floor(Math.random() * 60000) + 1024,
+      destPort: pick([80, 443]),
+      protocol: 'HTTP',
+      packetSize: 1500,
+      flags: 'PSH,ACK',
+      kddOverride: kdd,
+      attackLabel: 'SQL Injection',
+    };
+  });
+}
+
+/**
+ * Botnet — command-and-control beaconing: a flood of half-open connections to
+ * an unusual port (the SYN-failure signature the ensemble flags hardest).
+ */
+function generateBotnetBatch(count: number): NetworkPacket[] {
+  const target = privateIP();
+  const c2Port = pick([6667, 4444, 8443, 1337]);
+  return Array.from({ length: count }, () => {
+    const err = 0.85 + Math.random() * 0.15;
+    const kdd: KddOverride = {
+      duration: Math.floor(Math.random() * 2),
+      src_bytes: 40 + Math.floor(Math.random() * 200),
+      dst_bytes: 0,
+      flag: 'S0',
+      logged_in: 0,
+      count: 300 + Math.floor(Math.random() * 200),
+      srv_count: 300 + Math.floor(Math.random() * 200),
+      serror_rate: err,
+      srv_serror_rate: err,
+      rerror_rate: 0,
+      srv_rerror_rate: 0,
+      same_srv_rate: 1,
+      diff_srv_rate: 0,
+      srv_diff_host_rate: 0.8,
+      dst_host_count: 255,
+      dst_host_srv_count: 255,
+      dst_host_same_srv_rate: 1,
+      dst_host_same_src_port_rate: 1,
+      dst_host_serror_rate: err,
+      dst_host_srv_serror_rate: err,
+      label: 'neptune',
+    };
+    return {
+      id: crypto.randomUUID(),
+      timestamp: new Date(),
+      sourceIP: publicIP(),
+      destIP: target,
+      sourcePort: Math.floor(Math.random() * 64),
+      destPort: c2Port,
+      protocol: 'TCP',
+      packetSize: 40 + Math.floor(Math.random() * 200),
+      flags: 'SYN',
+      kddOverride: kdd,
+      attackLabel: 'Botnet',
+    };
+  });
+}
+
+/**
+ * Infiltration — internal host compromise / privilege escalation: the U2R
+ * signature (root shell, su attempts, file creation) plus failed-login
+ * probing and a raised error rate.
+ */
+function generateInfiltrationBatch(count: number): NetworkPacket[] {
+  const source = publicIP();
+  const target = privateIP();
+  return Array.from({ length: count }, () => {
+    const err = 0.4 + Math.random() * 0.4;
+    const kdd: KddOverride = {
+      duration: 20 + Math.floor(Math.random() * 400),
+      src_bytes: 300 + Math.floor(Math.random() * 800),
+      dst_bytes: 2000 + Math.floor(Math.random() * 8000),
+      flag: 'SF',
+      logged_in: 1,
+      hot: 24 + Math.floor(Math.random() * 16),
+      num_compromised: 6 + Math.floor(Math.random() * 12),
+      root_shell: 1,
+      su_attempted: 1,
+      num_root: 6 + Math.floor(Math.random() * 10),
+      num_file_creations: 5 + Math.floor(Math.random() * 10),
+      num_shells: 1 + Math.floor(Math.random() * 3),
+      num_access_files: 3 + Math.floor(Math.random() * 5),
+      num_failed_logins: 3 + Math.floor(Math.random() * 5),
+      is_guest_login: 1,
+      count: 60 + Math.floor(Math.random() * 80),
+      srv_count: 60 + Math.floor(Math.random() * 80),
+      rerror_rate: err,
+      srv_rerror_rate: err,
+      same_srv_rate: 1,
+      dst_host_count: 200 + Math.floor(Math.random() * 55),
+      dst_host_srv_count: 200 + Math.floor(Math.random() * 55),
+      dst_host_same_srv_rate: 1,
+      dst_host_rerror_rate: err,
+      label: 'rootkit',
+    };
+    return {
+      id: crypto.randomUUID(),
+      timestamp: new Date(),
+      sourceIP: source,
+      destIP: target,
+      sourcePort: Math.floor(Math.random() * 60000) + 1024,
+      destPort: pick([22, 445, 3389]),
+      protocol: 'TCP',
+      packetSize: 300 + Math.floor(Math.random() * 400),
+      flags: 'PSH,ACK',
+      kddOverride: kdd,
+      attackLabel: 'Infiltration',
+    };
+  });
+}
+
 // =========================================================================
 // Mock alerts (kept for the AlertsPanel demo before any detection runs)
 // =========================================================================
@@ -297,6 +510,24 @@ export const datasets: DatasetInfo[] = [
     attackTypes: ['Brute Force', 'DoS', 'DDoS', 'Web Attack', 'Infiltration', 'Botnet', 'Port Scan'],
     normalRatio: 0.83,
     attackRatio: 0.17,
+  },
+  {
+    name: 'CICIDS 2018',
+    description:
+      'Updated CICIDS with additional sophisticated DDoS and infiltration scenarios.',
+    totalSamples: 16233002,
+    features: 80,
+    attackTypes: [
+      'Brute Force',
+      'DoS',
+      'DDoS',
+      'Web Attack',
+      'Botnet',
+      'Infiltration',
+      'SQL Injection',
+    ],
+    normalRatio: 0.831,
+    attackRatio: 0.169,
   },
 ];
 

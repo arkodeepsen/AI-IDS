@@ -80,6 +80,8 @@ function getThreatLevel(score: number): 'low' | 'medium' | 'high' | 'critical' {
 }
 
 function classifyAttack(packet: NetworkPacket, hint?: string): AttackType {
+  // Synthetic attack generators stamp the intended type explicitly.
+  if (packet.attackLabel) return packet.attackLabel;
   if (hint && hint !== 'Unknown' && hint !== '') return hint as AttackType;
   if (packet.destPort === 22) return 'Brute Force';
   if (packet.destPort === 3389) return 'Brute Force';
@@ -102,6 +104,8 @@ const DESCRIPTIONS: Record<AttackType, string> = {
   XSS: 'Cross-site scripting attempt detected in web traffic.',
   Malware: 'Suspicious payload pattern indicating malware communication.',
   Botnet: 'Botnet command-and-control traffic pattern detected.',
+  'Web Attack': 'Web-layer attack — XSS or injection pattern in HTTP traffic.',
+  Infiltration: 'Infiltration — internal host compromise or lateral movement.',
   'Man-in-the-Middle': 'Possible MITM attack — ARP spoofing or SSL stripping.',
   Unknown: 'Anomalous traffic pattern detected. Investigation recommended.',
 };
@@ -118,6 +122,8 @@ const RECOMMENDATIONS: Record<AttackType, string[]> = {
   XSS: ['Set CSP headers', 'Sanitize user input', 'Update WAF'],
   Malware: ['Isolate affected hosts', 'Run antimalware sweep', 'Audit network logs'],
   Botnet: ['Block C2 IPs', 'Scan endpoints', 'Update endpoint protection'],
+  'Web Attack': ['Update WAF rules', 'Audit input validation', 'Patch the web app'],
+  Infiltration: ['Isolate the host', 'Rotate credentials', 'Hunt for lateral movement'],
   'Man-in-the-Middle': [
     'Verify SSL certificates',
     'Implement certificate pinning',
@@ -155,6 +161,11 @@ export function detectAnomaly(
     default:
       score = prediction.score;
   }
+
+  // Final guard before the score becomes a persisted `confidence`: a
+  // mis-sized feature vector or untrained sub-model can yield NaN, which
+  // SQLite stores as NULL and rejects on the NOT NULL column.
+  if (!Number.isFinite(score)) score = 0;
 
   const isAnomaly = score > 0.5;
   const threatLevel = getThreatLevel(score);

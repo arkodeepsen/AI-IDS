@@ -17,6 +17,9 @@ export interface NetworkPacket {
   packetSize: number;
   flags?: string;
   payload?: string;
+  /** Ground-truth attack type stamped by the synthetic attack generators so
+   *  demo attacks are labelled precisely. Real/benign traffic leaves it unset. */
+  attackLabel?: AttackType;
 }
 
 export interface NetworkFlow {
@@ -75,6 +78,8 @@ export type AttackType =
   | 'XSS'
   | 'Malware'
   | 'Botnet'
+  | 'Web Attack'
+  | 'Infiltration'
   | 'Man-in-the-Middle'
   | 'Unknown';
 
