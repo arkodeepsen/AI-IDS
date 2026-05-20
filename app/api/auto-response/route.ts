@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { autoResponseService } from '@/lib/services/auto-response';
+import prisma from '@/lib/prisma';
 
 // GET - Get current config, blocked IPs, and stats
 export async function GET(request: NextRequest) {
@@ -23,10 +24,34 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ success: true, events });
         }
 
-        // Default: return everything
+        // Default: return everything. Blocked IPs + stats are read from the
+        // persisted BlockedIP table — the durable source of truth. The
+        // in-memory service resets on restart and isn't shared across route
+        // bundles, so reading it here previously showed 0 even when the
+        // database was full.
         const config = autoResponseService.getConfig();
-        const blockedIPs = autoResponseService.getBlockedIPs();
-        const stats = autoResponseService.getStats();
+        const dbBlocks = await prisma.blockedIP.findMany({
+            orderBy: { blockedAt: 'desc' },
+        });
+        const nowMs = Date.now();
+        const blockedIPs = dbBlocks
+            .filter(b => !b.expiresAt || b.expiresAt.getTime() > nowMs)
+            .map(b => ({
+                id: b.id,
+                ipAddress: b.ipAddress,
+                reason: b.reason,
+                attackType: b.attackType ?? undefined,
+                confidence: b.confidence,
+                blockedAt: b.blockedAt.toISOString(),
+                expiresAt: b.expiresAt ? b.expiresAt.toISOString() : null,
+                autoBlocked: b.autoBlocked,
+            }));
+        const stats = {
+            totalBlocked: blockedIPs.length,
+            autoBlocked: blockedIPs.filter(b => b.autoBlocked).length,
+            manualBlocked: blockedIPs.filter(b => !b.autoBlocked).length,
+            totalEvents: dbBlocks.length,
+        };
         const events = autoResponseService.getBlockEvents(20);
 
         return NextResponse.json({

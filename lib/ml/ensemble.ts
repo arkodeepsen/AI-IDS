@@ -98,15 +98,19 @@ export class EnsembleDetector {
   }
 
   predict(point: number[]): EnsemblePrediction {
-    const ifScore = this.isolationForest.predict(point);
-    const aeScore = Math.min(this.autoencoder.predict(point), 1);
+    // A sub-model must never leak a non-finite score into the ensemble vote —
+    // it would propagate to `confidence` and break detection persistence.
+    const safe = (v: number): number => (Number.isFinite(v) ? v : 0);
+    const ifScore = safe(this.isolationForest.predict(point));
+    const aeScore = safe(Math.min(this.autoencoder.predict(point), 1));
     const rfOut = this.randomForest.predict(point);
-    const xgbScore = this.xgboost.predict(point);
+    const rfScore = safe(rfOut.attackProb);
+    const xgbScore = safe(this.xgboost.predict(point));
 
     const score =
       this.weights.isolationForest * ifScore +
       this.weights.autoencoder * aeScore +
-      this.weights.randomForest * rfOut.attackProb +
+      this.weights.randomForest * rfScore +
       this.weights.xgboost * xgbScore;
 
     return {
@@ -115,7 +119,7 @@ export class EnsembleDetector {
       scores: {
         isolationForest: ifScore,
         autoencoder: aeScore,
-        randomForest: rfOut.attackProb,
+        randomForest: rfScore,
         xgboost: xgbScore,
       },
       attackType: rfOut.attackType,

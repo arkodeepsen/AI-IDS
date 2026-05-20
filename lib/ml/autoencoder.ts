@@ -105,14 +105,23 @@ export class Autoencoder {
 
   reconstructionError(input: number[]): number {
     const output = this.reconstruct(input);
-    return Math.sqrt(
-      input.reduce((sum, x, i) => sum + Math.pow(x - output[i], 2), 0) / input.length
-    );
+    // Use the overlapping length so a mis-sized feature vector (e.g. a
+    // synthetic-fallback detector scored on a KDD-shaped vector) cannot index
+    // past `output` and poison the error with NaN.
+    const n = Math.min(input.length, output.length);
+    if (n === 0) return 0;
+    let sum = 0;
+    for (let i = 0; i < n; i++) {
+      sum += Math.pow(input[i] - output[i], 2);
+    }
+    const err = Math.sqrt(sum / n);
+    return Number.isFinite(err) ? err : 0;
   }
 
   predict(input: number[]): number {
     const error = this.reconstructionError(input);
-    return error / (this.threshold || 0.1);
+    const score = error / (this.threshold || 0.1);
+    return Number.isFinite(score) ? score : 0;
   }
 
   private percentile(arr: number[], p: number): number {

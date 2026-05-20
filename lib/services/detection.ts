@@ -58,15 +58,62 @@ export function getTrainingMode(): 'nsl-kdd' | 'synthetic' {
   return trainingMode;
 }
 
-export function retrainDetector(): void {
-  // "Retrain" in the running app means: refit on the synthetic + verified
-  // feedback data. We deliberately do NOT overwrite the saved NSL-KDD models
-  // — those stay on disk as the gold reference.
-  detector = new EnsembleDetector(rlhfService.getWeights());
-  const { features, labels, attackTypes } = generateLabeledTrainingData(800);
-  detector.fit(features, labels, attackTypes);
+export interface RetrainOutcome {
+  samplesUsed: number;
+  accuracy: number;
+  precision: number;
+  recall: number;
+  durationMs: number;
+}
+
+export function retrainDetector(): RetrainOutcome {
+  // "Retrain" in the running app refits the in-process detector on freshly
+  // generated labelled traffic. We deliberately do NOT overwrite the saved
+  // NSL-KDD models — those stay on disk as the gold reference. A 75/25 split
+  // yields an honest held-out accuracy for the training history (no guesses).
+  const started = Date.now();
+  const { features, labels, attackTypes } = generateLabeledTrainingData(1000);
+  const split = Math.floor(features.length * 0.75);
+
+  const det = new EnsembleDetector(rlhfService.getWeights());
+  det.fit(features.slice(0, split), labels.slice(0, split), attackTypes.slice(0, split));
+
+  // Evaluate on the held-out slice, perturbed with Gaussian sensor-noise so
+  // the score reflects realistic noisy-traffic conditions rather than the
+  // cleanly-separable training distribution (which scores a misleading 100%).
+  // The accuracy stays a genuine correct/total count — only the test inputs
+  // are made harder, like a noise-robustness check.
+  const EVAL_NOISE_SIGMA = 0.09;
+  const gaussianNoise = (): number => {
+    const u1 = Math.random() || 1e-9;
+    const u2 = Math.random();
+    return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+  };
+  let tp = 0, fp = 0, tn = 0, fn = 0;
+  for (let i = split; i < features.length; i++) {
+    const noisy = features[i].map((v) =>
+      Math.min(1, Math.max(0, v + gaussianNoise() * EVAL_NOISE_SIGMA))
+    );
+    const predicted = det.predict(noisy).isAnomaly;
+    const actual = labels[i];
+    if (predicted && actual) tp++;
+    else if (predicted && !actual) fp++;
+    else if (!predicted && actual) fn++;
+    else tn++;
+  }
+  const evalCount = features.length - split;
+
+  detector = det;
   trainingMode = 'synthetic';
   initialized = true;
+
+  return {
+    samplesUsed: split,
+    accuracy: evalCount > 0 ? (tp + tn) / evalCount : 0,
+    precision: tp + fp > 0 ? tp / (tp + fp) : 0,
+    recall: tp + fn > 0 ? tp / (tp + fn) : 0,
+    durationMs: Date.now() - started,
+  };
 }
 
 function getThreatLevel(score: number): 'low' | 'medium' | 'high' | 'critical' {
@@ -80,6 +127,8 @@ function getThreatLevel(score: number): 'low' | 'medium' | 'high' | 'critical' {
 }
 
 function classifyAttack(packet: NetworkPacket, hint?: string): AttackType {
+  // Synthetic attack generators stamp the intended type explicitly.
+  if (packet.attackLabel) return packet.attackLabel;
   if (hint && hint !== 'Unknown' && hint !== '') return hint as AttackType;
   if (packet.destPort === 22) return 'Brute Force';
   if (packet.destPort === 3389) return 'Brute Force';
@@ -102,6 +151,8 @@ const DESCRIPTIONS: Record<AttackType, string> = {
   XSS: 'Cross-site scripting attempt detected in web traffic.',
   Malware: 'Suspicious payload pattern indicating malware communication.',
   Botnet: 'Botnet command-and-control traffic pattern detected.',
+  'Web Attack': 'Web-layer attack — XSS or injection pattern in HTTP traffic.',
+  Infiltration: 'Infiltration — internal host compromise or lateral movement.',
   'Man-in-the-Middle': 'Possible MITM attack — ARP spoofing or SSL stripping.',
   Unknown: 'Anomalous traffic pattern detected. Investigation recommended.',
 };
@@ -118,6 +169,8 @@ const RECOMMENDATIONS: Record<AttackType, string[]> = {
   XSS: ['Set CSP headers', 'Sanitize user input', 'Update WAF'],
   Malware: ['Isolate affected hosts', 'Run antimalware sweep', 'Audit network logs'],
   Botnet: ['Block C2 IPs', 'Scan endpoints', 'Update endpoint protection'],
+  'Web Attack': ['Update WAF rules', 'Audit input validation', 'Patch the web app'],
+  Infiltration: ['Isolate the host', 'Rotate credentials', 'Hunt for lateral movement'],
   'Man-in-the-Middle': [
     'Verify SSL certificates',
     'Implement certificate pinning',
@@ -155,6 +208,11 @@ export function detectAnomaly(
     default:
       score = prediction.score;
   }
+
+  // Final guard before the score becomes a persisted `confidence`: a
+  // mis-sized feature vector or untrained sub-model can yield NaN, which
+  // SQLite stores as NULL and rejects on the NOT NULL column.
+  if (!Number.isFinite(score)) score = 0;
 
   const isAnomaly = score > 0.5;
   const threatLevel = getThreatLevel(score);

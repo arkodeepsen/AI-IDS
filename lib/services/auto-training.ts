@@ -149,29 +149,30 @@ class AutoTrainingService {
     }
 
     /**
-     * Execute model retraining
+     * Record a completed retraining run. The actual model fit and held-out
+     * evaluation happen in detection.ts::retrainDetector(); this logs the
+     * real, measured outcome to the training history — no simulated numbers.
      */
-    async executeRetraining(): Promise<TrainingResult> {
-        const startTime = Date.now();
-
-        // Get training data
-        const samples = this.trainingData.filter(d =>
-            d.verified || d.confidence >= 80 // Use high-confidence or verified samples
-        );
-
+    recordRetraining(outcome: {
+        samplesUsed: number;
+        accuracy: number;
+        precision: number;
+        recall: number;
+        durationMs: number;
+    }): TrainingResult {
         this.modelVersion++;
 
         const result: TrainingResult = {
             id: crypto.randomUUID(),
             timestamp: new Date(),
-            samplesUsed: samples.length,
+            samplesUsed: outcome.samplesUsed,
             modelVersion: this.modelVersion,
             metrics: {
-                accuracy: 0.95 + Math.random() * 0.04, // Simulated metrics
-                precision: 0.93 + Math.random() * 0.05,
-                recall: 0.91 + Math.random() * 0.06
+                accuracy: outcome.accuracy,
+                precision: outcome.precision,
+                recall: outcome.recall,
             },
-            duration: Date.now() - startTime
+            duration: outcome.durationMs,
         };
 
         this.trainingHistory.push(result);

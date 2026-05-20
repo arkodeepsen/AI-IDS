@@ -146,7 +146,6 @@ export default function Home() {
         {activeTab === 'auto-response' && (
           <div className="space-y-4 fade-in">
             <AutoResponseControl />
-            <BlockedIPsPanel refreshKey={refreshKey} />
           </div>
         )}
 

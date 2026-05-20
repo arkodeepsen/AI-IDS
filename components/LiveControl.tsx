@@ -3,12 +3,23 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { Play, Square, Zap, ChevronDown, RefreshCw, Loader2 } from 'lucide-react';
 
-type AttackKind = 'ddos' | 'portscan' | 'bruteforce';
+type AttackKind =
+  | 'ddos'
+  | 'portscan'
+  | 'bruteforce'
+  | 'webattack'
+  | 'sqlinjection'
+  | 'botnet'
+  | 'infiltration';
 
 const ATTACK_LABELS: Record<AttackKind, string> = {
   ddos: 'DDoS Burst',
   portscan: 'Port Scan',
   bruteforce: 'Brute Force',
+  webattack: 'Web Attack',
+  sqlinjection: 'SQL Injection',
+  botnet: 'Botnet C2',
+  infiltration: 'Infiltration',
 };
 
 interface SummaryEvent {
@@ -61,7 +72,7 @@ export default function LiveControl({ onChange }: { onChange?: () => void }) {
     setSeeding(true);
     pushEvent('Seeding 7 days of synthetic baseline traffic…', 'info');
     try {
-      const res = await fetch('/api/seed', { method: 'POST' });
+      const res = await fetch('/api/seed?force=1', { method: 'POST' });
       const data = await res.json();
       if (data.success) {
         if (data.skipped) {

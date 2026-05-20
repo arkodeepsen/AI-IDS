@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { autoTrainingService } from '@/lib/services/auto-training';
 import { retrainDetector } from '@/lib/services/detection';
+import prisma from '@/lib/prisma';
 
 // GET - Get training data and stats
 export async function GET(request: NextRequest) {
@@ -35,8 +36,25 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ success: true, samples });
         }
 
-        // Default: return stats and config
-        const stats = autoTrainingService.getStats();
+        // Default: return stats and config. Sample counts are derived from
+        // the persisted DetectionResult table (the durable source of truth)
+        // so the panel survives restarts; the in-memory training buffer
+        // isn't shared across route bundles and previously showed 0.
+        const svc = autoTrainingService.getStats();
+        const [totalSamples, anomalySamples, verifiedSamples] = await Promise.all([
+            prisma.detectionResult.count(),
+            prisma.detectionResult.count({ where: { isAnomaly: true } }),
+            prisma.detectionResult.count({ where: { humanLabel: { not: null } } }),
+        ]);
+        const stats = {
+            totalSamples,
+            normalSamples: totalSamples - anomalySamples,
+            anomalySamples,
+            verifiedSamples,
+            modelVersion: svc.modelVersion,
+            pendingRetraining: svc.pendingRetraining,
+            trainingHistory: svc.trainingHistory,
+        };
         const config = autoTrainingService.getConfig();
 
         return NextResponse.json({
@@ -71,10 +89,10 @@ export async function POST(request: NextRequest) {
         }
 
         if (action === 'retrain') {
-            const result = await autoTrainingService.executeRetraining();
-
-            // Also retrain the detector with new data
-            retrainDetector();
+            // The fit + held-out evaluation run here; the history entry
+            // records the real measured accuracy, not a simulated one.
+            const outcome = retrainDetector();
+            const result = autoTrainingService.recordRetraining(outcome);
 
             return NextResponse.json({
                 success: true,

@@ -8,7 +8,8 @@
 
 const DEFAULT_API_URL = 'http://localhost:3000';
 const ALARM_NAME = 'checkThreats';
-const DEFAULT_INTERVAL_MIN = 0.5; // 30 s, the minimum chrome.alarms accepts
+const DEFAULT_INTERVAL_SEC = 30; // default poll cadence (seconds) — matches the options UI
+const MIN_PERIOD_MIN = 0.5;      // 30 s — the minimum period chrome.alarms accepts
 
 // In-memory cache of detection IDs we've already notified about so we don't
 // double-buzz the user on every tick.
@@ -20,7 +21,7 @@ chrome.runtime.onInstalled.addListener(async () => {
     apiBaseUrl: DEFAULT_API_URL,
     isPaused: false,
     notificationsEnabled: true,
-    checkIntervalMinutes: DEFAULT_INTERVAL_MIN,
+    checkIntervalSeconds: DEFAULT_INTERVAL_SEC,
   });
   await scheduleAlarm();
   await checkForThreats();
@@ -39,7 +40,7 @@ chrome.alarms.onAlarm.addListener(alarm => {
 
 chrome.storage.onChanged.addListener(async (changes, namespace) => {
   if (namespace !== 'local') return;
-  if (changes.isPaused || changes.checkIntervalMinutes) {
+  if (changes.isPaused || changes.checkIntervalSeconds) {
     await scheduleAlarm();
   }
 });
@@ -51,13 +52,16 @@ chrome.notifications.onClicked.addListener(async notificationId => {
 });
 
 async function scheduleAlarm() {
-  const { isPaused, checkIntervalMinutes } = await chrome.storage.local.get([
+  const { isPaused, checkIntervalSeconds } = await chrome.storage.local.get([
     'isPaused',
-    'checkIntervalMinutes',
+    'checkIntervalSeconds',
   ]);
   await chrome.alarms.clear(ALARM_NAME);
   if (isPaused) return;
-  const period = Math.max(checkIntervalMinutes || DEFAULT_INTERVAL_MIN, 0.5);
+  // The options UI stores the cadence in seconds; chrome.alarms takes minutes
+  // and enforces a 0.5-minute (30 s) floor.
+  const seconds = checkIntervalSeconds || DEFAULT_INTERVAL_SEC;
+  const period = Math.max(seconds / 60, MIN_PERIOD_MIN);
   chrome.alarms.create(ALARM_NAME, { periodInMinutes: period });
 }
 

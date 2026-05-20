@@ -1,14 +1,22 @@
 /**
- * /api/attack — fires a burst of one of three crafted attack patterns
- * (DDoS / Port Scan / Brute Force) and persists the resulting detections.
- * Used by the dashboard's "Generate Attack" demo control.
+ * /api/attack — fires a burst of a crafted attack pattern (DDoS, Port Scan,
+ * Brute Force, Web Attack, SQL Injection, Botnet or Infiltration) and
+ * persists the resulting detections. Used by the "Generate Attack" control.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { generateSyntheticAttack, SyntheticAttackKind } from '@/lib/utils';
 import { detectBatch, persistDetection, getDetector } from '@/lib/services/detection';
 
-const ALLOWED: SyntheticAttackKind[] = ['ddos', 'portscan', 'bruteforce'];
+const ALLOWED: SyntheticAttackKind[] = [
+  'ddos',
+  'portscan',
+  'bruteforce',
+  'webattack',
+  'sqlinjection',
+  'botnet',
+  'infiltration',
+];
 
 export async function POST(request: NextRequest) {
   try {
