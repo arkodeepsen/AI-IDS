@@ -12,6 +12,27 @@ import { DetectionResult, GeminiAnalysisResponse } from './types';
 const apiKey = process.env.GEMINI_API_KEY;
 const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
 
+/** Current Gemini model — single source of truth. Bump here when Google
+ *  ships a newer flash model. */
+const GEMINI_MODEL = 'gemini-2.5-flash';
+
+/**
+ * Shared project context so the assistant answers about THIS system — the
+ * AI-IDS major project — instead of generic security trivia.
+ */
+const IDS_CONTEXT = `You are the built-in assistant for "AI-IDS", an AI-based Network Intrusion Detection System (a B.Tech 2025-26 major project).
+
+About the system:
+- Detection core: a four-model ML ensemble combined by weighted vote — Isolation Forest (weight 0.30), MLP Autoencoder (0.25), Random Forest (0.25), XGBoost-style gradient boosting (0.20) — plus a separate LSTM sequence model.
+- A flow is flagged as an anomaly when the ensemble score exceeds 0.35. Severity tiers: critical > 0.85, high > 0.65, medium > 0.50, otherwise low.
+- Trained and evaluated on NSL-KDD (KDDTest+: 90.99% accuracy, 92.57% F1, 97.99% recall, 18.41% FPR) and, independently, CICIDS-2017 (99.40% accuracy, 98.16% F1, 0.18% FPR).
+- Active Learning: operator Confirm/Dismiss feedback rebalances the ensemble weights every 10 verified samples (learning rate 0.05).
+- Severity-driven autonomous response: block / alert / monitor, with an IP whitelist and time-limited blocks.
+- 72-dimensional feature vector (protocol/service/flag one-hots + 38 numeric stats) plus per-source IP-entropy signals.
+- Stack: Next.js 16 dashboard, SQLite via Prisma, a Chrome MV3 extension. Dashboard tabs: Dashboard, Detections, ML Models, Auto-Response, Training, Datasets, Alerts, AI Assistant.
+
+Answer as this system's assistant: be concrete and specific to AI-IDS. When the user asks about current/live numbers, use the "Live system state" data when it is provided.`;
+
 export async function analyzeWithGemini(
   detectionResults: DetectionResult[],
   systemContext: string
@@ -29,7 +50,9 @@ export async function analyzeWithGemini(
     return acc;
   }, {} as Record<string, number>);
 
-  const prompt = `You are an expert cybersecurity analyst. Analyse this network IDS data and respond ONLY with JSON.
+  const prompt = `${IDS_CONTEXT}
+
+Acting as the expert analyst for the system above, analyse this network IDS data and respond ONLY with JSON.
 
 ## System Context
 ${systemContext}
@@ -65,7 +88,7 @@ Respond with JSON only:
 }`;
 
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
     const result = await model.generateContent(prompt);
     const text = result.response.text();
     const jsonMatch = text.match(/\{[\s\S]*\}/);
@@ -87,7 +110,9 @@ ${detection.recommendations.map(r => `- ${r}`).join('\n')}`;
 
   if (!genAI) return fallback;
 
-  const prompt = `Explain this intrusion detection result for a non-expert in 2-3 short paragraphs:
+  const prompt = `${IDS_CONTEXT}
+
+Explain this intrusion detection result from the system above for a non-expert, in 2-3 short paragraphs:
 
 Attack: ${detection.attackType ?? 'Unknown'}
 Threat: ${detection.threatLevel}
@@ -99,7 +124,7 @@ Protocol: ${detection.packet.protocol}
 Explain (1) what was detected and why, (2) potential impact if real, (3) immediate recommended actions.`;
 
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
     const result = await model.generateContent(prompt);
     return result.response.text();
   } catch (err) {
@@ -127,15 +152,20 @@ function fallbackAdvice(query: string): string {
   return `An IDS is most effective when (a) the model has rich features per flow, (b) it combines unsupervised + supervised approaches, and (c) operators provide feedback to refine weights over time. This system uses an Isolation Forest + Autoencoder + Random Forest + Gradient Boosting ensemble with Active Learning baked in.`;
 }
 
-export async function getSecurityAdvice(query: string): Promise<string> {
+export async function getSecurityAdvice(
+  query: string,
+  liveContext?: string
+): Promise<string> {
   if (!genAI) return fallbackAdvice(query);
 
-  const prompt = `You are a cybersecurity assistant inside an IDS dashboard. Answer this question in 2-3 short paragraphs, focused on network security:
+  const prompt = `${IDS_CONTEXT}
+${liveContext ? `\n## Live system state (current dashboard data)\n${liveContext}\n` : ''}
+Answer the operator's question below in 2-3 short paragraphs. Be concrete and specific to AI-IDS — reference its models, thresholds, or the live numbers above when relevant. Plain text, no markdown headings.
 
 Question: ${query}`;
 
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
     const result = await model.generateContent(prompt);
     return result.response.text();
   } catch (err) {
