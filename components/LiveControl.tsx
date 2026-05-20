@@ -61,7 +61,7 @@ export default function LiveControl({ onChange }: { onChange?: () => void }) {
     setSeeding(true);
     pushEvent('Seeding 7 days of synthetic baseline traffic…', 'info');
     try {
-      const res = await fetch('/api/seed', { method: 'POST' });
+      const res = await fetch('/api/seed?force=1', { method: 'POST' });
       const data = await res.json();
       if (data.success) {
         if (data.skipped) {

@@ -298,24 +298,6 @@ export const datasets: DatasetInfo[] = [
     normalRatio: 0.83,
     attackRatio: 0.17,
   },
-  {
-    name: 'CICIDS 2018',
-    description:
-      'Updated CICIDS with additional sophisticated DDoS and infiltration scenarios.',
-    totalSamples: 16233002,
-    features: 80,
-    attackTypes: [
-      'Brute Force',
-      'DoS',
-      'DDoS',
-      'Web Attack',
-      'Botnet',
-      'Infiltration',
-      'SQL Injection',
-    ],
-    normalRatio: 0.831,
-    attackRatio: 0.169,
-  },
 ];
 
 // =========================================================================
