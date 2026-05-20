@@ -89,10 +89,10 @@ export async function POST(request: NextRequest) {
         }
 
         if (action === 'retrain') {
-            const result = await autoTrainingService.executeRetraining();
-
-            // Also retrain the detector with new data
-            retrainDetector();
+            // The fit + held-out evaluation run here; the history entry
+            // records the real measured accuracy, not a simulated one.
+            const outcome = retrainDetector();
+            const result = autoTrainingService.recordRetraining(outcome);
 
             return NextResponse.json({
                 success: true,
